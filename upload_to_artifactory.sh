@@ -101,3 +101,33 @@ mvn deploy:deploy-file -Durl=https://packages.atlassian.com/maven/3rdparty \
                        -Dpackaging=jar \
                        -DgeneratePom=true \
                        -Dsources=$PATH_PREFIX/target/$ARTIFACTID-$VERSION-sources.jar
+
+ARTIFACTID="xtable-hudi-support-utils"
+PATH_PREFIX="xtable-hudi-support/xtable-hudi-support-utils"
+mvn deploy:deploy-file -Durl=https://packages.atlassian.com/maven/3rdparty \
+                       -DrepositoryId=atlassian-3rdparty \
+                       -Dfile=$PATH_PREFIX/target/$ARTIFACTID-$VERSION.jar \
+                       -DgroupId=$GROUPID \
+                       -DartifactId=$ARTIFACTID \
+                       -Dversion=$VERSION \
+                       -Dpackaging=jar \
+                       -DgeneratePom=true \
+                       -Dsources=$PATH_PREFIX/target/$ARTIFACTID-$VERSION-sources.jar
+
+ARTIFACTID="xtable-hudi-support"
+mvn deploy:deploy-file -Durl=https://packages.atlassian.com/maven/3rdparty \
+                       -DrepositoryId=atlassian-3rdparty \
+                       -Dfile=$ARTIFACTID/pom.xml \
+                       -DgroupId=$GROUPID \
+                       -DartifactId=$ARTIFACTID \
+                       -Dversion=$VERSION \
+                       -Dpackaging=po
+
+ARTIFACTID="xtable"
+mvn deploy:deploy-file -Durl=https://packages.atlassian.com/maven/3rdparty \
+                       -DrepositoryId=atlassian-3rdparty \
+                       -Dfile=pom.xml \
+                       -DgroupId=$GROUPID \
+                       -DartifactId=$ARTIFACTID \
+                       -Dversion=$VERSION \
+                       -Dpackaging=pom
