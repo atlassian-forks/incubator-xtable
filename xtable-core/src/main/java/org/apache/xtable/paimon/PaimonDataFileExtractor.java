@@ -18,18 +18,31 @@
  
 package org.apache.xtable.paimon;
 
+import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
+
+import lombok.extern.log4j.Log4j2;
 
 import org.apache.paimon.Snapshot;
+import org.apache.paimon.data.BinaryArray;
+import org.apache.paimon.data.BinaryRow;
 import org.apache.paimon.io.DataFileMeta;
 import org.apache.paimon.manifest.ManifestEntry;
+import org.apache.paimon.stats.SimpleStats;
 import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.table.source.snapshot.SnapshotReader;
+import org.apache.paimon.types.TimestampType;
 
+import org.apache.xtable.exception.ReadException;
+import org.apache.xtable.model.schema.InternalField;
 import org.apache.xtable.model.schema.InternalSchema;
+import org.apache.xtable.model.schema.InternalType;
 import org.apache.xtable.model.stat.ColumnStat;
+import org.apache.xtable.model.stat.Range;
 import org.apache.xtable.model.storage.InternalDataFile;
 
+@Log4j2
 public class PaimonDataFileExtractor {
 
   private final PaimonPartitionExtractor partitionExtractor =
@@ -49,11 +62,14 @@ public class PaimonDataFileExtractor {
     while (manifestEntryIterator.hasNext()) {
       result.add(toInternalDataFile(table, manifestEntryIterator.next(), internalSchema));
     }
+    log.info(
+        "PaimonPartitionExtractor: Returning " + result.size() + " data files for " + table.name());
     return result;
   }
 
   private InternalDataFile toInternalDataFile(
       FileStoreTable table, ManifestEntry entry, InternalSchema internalSchema) {
+    //    log.info("Adding manifest entry {}", entry.fileName());
     return InternalDataFile.builder()
         .physicalPath(toFullPhysicalPath(table, entry))
         .fileSizeBytes(entry.file().fileSize())
@@ -61,7 +77,7 @@ public class PaimonDataFileExtractor {
         .recordCount(entry.file().rowCount())
         .partitionValues(
             partitionExtractor.toPartitionValues(table, entry.partition(), internalSchema))
-        .columnStats(toColumnStats(entry.file()))
+        .columnStats(toColumnStats(entry.file(), internalSchema))
         .build();
   }
 
@@ -78,10 +94,152 @@ public class PaimonDataFileExtractor {
     }
   }
 
-  private List<ColumnStat> toColumnStats(DataFileMeta file) {
-    // TODO: Implement logic to extract column stats from the file meta
-    // https://github.com/apache/incubator-xtable/issues/755
-    return Collections.emptyList();
+  private List<ColumnStat> toColumnStats(DataFileMeta file, InternalSchema internalSchema) {
+    List<ColumnStat> columnStats = new ArrayList<>();
+    Map<String, InternalField> fieldMap =
+        internalSchema.getAllFields().stream()
+            .collect(Collectors.toMap(InternalField::getPath, f -> f));
+
+    // all columns are present in valueStats
+    SimpleStats valueStats = file.valueStats();
+    if (valueStats != null) {
+      //      log.info("Processing valueStats: {}", valueStats.toRow());
+      List<String> colNames = file.valueStatsCols();
+      //      log.info("valueStatsCols: {}", colNames);
+      if (colNames == null || colNames.isEmpty()) {
+        colNames =
+            internalSchema.getAllFields().stream()
+                .map(InternalField::getPath)
+                .collect(Collectors.toList());
+      }
+
+      if (colNames.size() != valueStats.minValues().getFieldCount()) {
+        throw new ReadException(
+            String.format(
+                "Mismatch between column stats names and values arity: names=%d, values=%d",
+                colNames.size(), valueStats.minValues().getFieldCount()));
+      }
+
+      extractStats(columnStats, valueStats, colNames, fieldMap, file.rowCount());
+    }
+
+    return columnStats;
+  }
+
+  private void extractStats(
+      List<ColumnStat> columnStats,
+      SimpleStats stats,
+      List<String> colNames,
+      Map<String, InternalField> fieldMap,
+      long rowCount) {
+    BinaryRow minValues = stats.minValues();
+    BinaryRow maxValues = stats.maxValues();
+    BinaryArray nullCounts = stats.nullCounts();
+
+    //    log.info("Extracting stats for columns: {}", colNames);
+    //    log.info("minValues: arity={}, {}", minValues.getFieldCount(), minValues);
+    //    log.info("maxValues: arity={}, {}", maxValues.getFieldCount(), maxValues);
+    //    log.info("fieldMap: {}", fieldMap.toString());
+
+    for (int i = 0; i < colNames.size(); i++) {
+      String colName = colNames.get(i);
+      InternalField field = fieldMap.get(colName);
+      if (field == null) {
+        continue;
+      }
+
+      // Check if we already have stats for this field
+      boolean alreadyExists =
+          columnStats.stream().anyMatch(cs -> cs.getField().getPath().equals(colName));
+      if (alreadyExists) {
+        continue;
+      }
+
+      InternalType type = field.getSchema().getDataType();
+      Object min = getValue(minValues, i, type, field.getSchema());
+      Object max = getValue(maxValues, i, type, field.getSchema());
+      Long nullCount = (nullCounts != null && i < nullCounts.size()) ? nullCounts.getLong(i) : 0L;
+
+      //      log.info(
+      //          "Column: {}, Index: {}, Min: {}, Max: {}, NullCount: {}",
+      //          colName,
+      //          i,
+      //          min,
+      //          max,
+      //          nullCount);
+
+      columnStats.add(
+          ColumnStat.builder()
+              .field(field)
+              .range(Range.vector(min, max))
+              .numNulls(nullCount)
+              .numValues(rowCount)
+              .build());
+    }
+  }
+
+  private Object getValue(BinaryRow row, int index, InternalType type, InternalSchema fieldSchema) {
+    if (row.isNullAt(index)) {
+      return null;
+    }
+    switch (type) {
+      case BOOLEAN:
+        return row.getBoolean(index);
+      case INT:
+      case DATE:
+        return row.getInt(index);
+      case LONG:
+        return row.getLong(index);
+      case TIMESTAMP:
+      case TIMESTAMP_NTZ:
+        int tsPrecision;
+        InternalSchema.MetadataValue tsPrecisionEnum =
+            (InternalSchema.MetadataValue)
+                fieldSchema.getMetadata().get(InternalSchema.MetadataKey.TIMESTAMP_PRECISION);
+        if (tsPrecisionEnum == InternalSchema.MetadataValue.MILLIS) {
+          tsPrecision = 3;
+        } else if (tsPrecisionEnum == InternalSchema.MetadataValue.MICROS) {
+          tsPrecision = 6;
+        } else if (tsPrecisionEnum == InternalSchema.MetadataValue.NANOS) {
+          tsPrecision = 9;
+        } else {
+          log.warn(
+              "Field idx={}, name={} does not have MetadataKey.TIMESTAMP_PRECISION set, defaulting to default precision",
+              index,
+              fieldSchema.getName());
+          tsPrecision = TimestampType.DEFAULT_PRECISION;
+        }
+        Instant timestamp = row.getTimestamp(index, tsPrecision).toInstant();
+        long tsMillis = timestamp.toEpochMilli();
+
+        // according to docs for org.apache.xtable.model.stat.Range, timestamp is stored as millis
+        // or micros
+        // even if precision is higher than micros, return micros
+        if (tsPrecisionEnum == InternalSchema.MetadataValue.MILLIS) {
+          return tsMillis;
+        } else {
+          return tsMillis * 1000 + timestamp.getNano() / 1000L;
+        }
+      case FLOAT:
+        return row.getFloat(index);
+      case DOUBLE:
+        return row.getDouble(index);
+      case STRING:
+      case ENUM:
+        return row.getString(index).toString();
+      case DECIMAL:
+        int precision =
+            (int) fieldSchema.getMetadata().get(InternalSchema.MetadataKey.DECIMAL_PRECISION);
+        int scale = (int) fieldSchema.getMetadata().get(InternalSchema.MetadataKey.DECIMAL_SCALE);
+        return row.getDecimal(index, precision, scale).toBigDecimal();
+      default:
+        log.warn(
+            "Handling of {}-type stats for column idx={}, name={} is not yet implemented, skipping stats for this column",
+            type,
+            index,
+            fieldSchema.getName());
+        return null;
+    }
   }
 
   private SnapshotReader newSnapshotReader(FileStoreTable table, Snapshot snapshot) {
