@@ -29,7 +29,7 @@
     <artifactId>xtable</artifactId>
     <name>XTable Project Parent POM</name>
     <inceptionYear>2024</inceptionYear>
-    <version>0.4.0-atlassian-1</version>
+    <version>0.4.0-atlassian-2</version>
     <packaging>pom</packaging>
     <url>https://xtable.apache.org/</url>
 
@@ -58,7 +58,7 @@
 
     <properties>
         <delta.kernel.version>4.0.0</delta.kernel.version>
-        <project.version>0.4.0-atlassian-1</project.version>
+        <project.version>0.4.0-atlassian-2</project.version>
         <!-- To ensure build content is re-producible -->
         <project.build.outputTimestamp>2025-01-01T00:00:00Z</project.build.outputTimestamp>
         <maven.compiler.target>8</maven.compiler.target>
