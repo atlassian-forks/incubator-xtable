@@ -38,15 +38,16 @@ import lombok.NonNull;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.io.api.Binary;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.avro.model.HoodieMetadataColumnStats;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ParquetUtils;
 import org.apache.hudi.common.util.collection.Pair;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.fs.CachingPath;
+import org.apache.hudi.metadata.HoodieIndexVersion;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 import org.apache.hudi.metadata.MetadataPartitionType;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.storage.StoragePath;
 
 import org.apache.xtable.collectors.CustomCollectors;
 import org.apache.xtable.model.schema.InternalField;
@@ -117,7 +118,8 @@ public class HudiFileStatsExtractor {
 
   private Pair<String, String> getPartitionAndFileName(String path) {
     Path filePath = new CachingPath(path);
-    String partitionPath = HudiPathUtils.getPartitionPath(metaClient.getBasePathV2(), filePath);
+    String partitionPath =
+        HudiPathUtils.getPartitionPath(new Path(metaClient.getBasePath().toUri()), filePath);
     return Pair.of(partitionPath, filePath.getName());
   }
 
@@ -177,9 +179,13 @@ public class HudiFileStatsExtractor {
 
   private HudiFileStats computeColumnStatsForFile(
       Path filePath, Map<String, InternalField> nameFieldMap) {
-    List<HoodieColumnRangeMetadata<Comparable>> columnRanges =
-        UTILS.readRangeFromParquetMetadata(
-            metaClient.getHadoopConf(), filePath, new ArrayList<>(nameFieldMap.keySet()));
+    List<HoodieColumnRangeMetadata<java.lang.Comparable>> columnRanges =
+        UTILS.readColumnStatsFromMetadata(
+            metaClient.getStorage(),
+            new StoragePath(filePath.toUri()),
+            new ArrayList<>(nameFieldMap.keySet()),
+            HoodieIndexVersion.getCurrentVersion(
+                metaClient.getTableConfig().getTableVersion(), MetadataPartitionType.COLUMN_STATS));
     List<ColumnStat> columnStats =
         columnRanges.stream()
             .map(
@@ -188,7 +194,7 @@ public class HudiFileStatsExtractor {
             .collect(CustomCollectors.toList(columnRanges.size()));
     Long rowCount = getMaxFromColumnStats(columnStats).orElse(null);
     if (rowCount == null) {
-      rowCount = UTILS.getRowCount(metaClient.getHadoopConf(), filePath);
+      rowCount = UTILS.getRowCount(metaClient.getStorage(), new StoragePath(filePath.toUri()));
     }
     return new HudiFileStats(columnStats, rowCount);
   }
@@ -198,11 +204,13 @@ public class HudiFileStatsExtractor {
     if (columnStats == null) {
       return ColumnStat.builder().build();
     }
-    Comparable<?> minValue = HoodieAvroUtils.unwrapAvroValueWrapper(columnStats.getMinValue());
-    Comparable<?> maxValue = HoodieAvroUtils.unwrapAvroValueWrapper(columnStats.getMaxValue());
+    HoodieColumnRangeMetadata<java.lang.Comparable> colRange =
+        HoodieColumnRangeMetadata.fromColumnStats(columnStats);
     if (field.getSchema().getDataType() == InternalType.DECIMAL) {
       int scale =
           (int) field.getSchema().getMetadata().get(InternalSchema.MetadataKey.DECIMAL_SCALE);
+      Comparable<?> minValue = colRange.getMinValue();
+      Comparable<?> maxValue = colRange.getMaxValue();
       minValue =
           minValue instanceof ByteBuffer
               ? convertBytesToBigDecimal((ByteBuffer) minValue, scale)
@@ -211,14 +219,15 @@ public class HudiFileStatsExtractor {
           maxValue instanceof ByteBuffer
               ? convertBytesToBigDecimal((ByteBuffer) maxValue, scale)
               : ((BigDecimal) maxValue).setScale(scale, RoundingMode.UNNECESSARY);
+      return getColumnStatFromValues(
+          minValue,
+          maxValue,
+          field,
+          colRange.getNullCount(),
+          colRange.getValueCount(),
+          colRange.getTotalSize());
     }
-    return getColumnStatFromValues(
-        minValue,
-        maxValue,
-        field,
-        columnStats.getNullCount(),
-        columnStats.getValueCount(),
-        columnStats.getTotalSize());
+    return getColumnStatFromColRange(field, colRange);
   }
 
   private static BigDecimal convertBytesToBigDecimal(ByteBuffer value, int scale) {
@@ -230,7 +239,7 @@ public class HudiFileStatsExtractor {
   }
 
   private static ColumnStat getColumnStatFromColRange(
-      InternalField field, HoodieColumnRangeMetadata<Comparable> colRange) {
+      InternalField field, HoodieColumnRangeMetadata<java.lang.Comparable> colRange) {
     if (colRange == null) {
       return ColumnStat.builder().build();
     }

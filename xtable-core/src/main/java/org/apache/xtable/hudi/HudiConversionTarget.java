@@ -44,8 +44,9 @@ import org.apache.hudi.avro.model.HoodieCleanFileInfo;
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
 import org.apache.hudi.avro.model.HoodieCleanerPlan;
 import org.apache.hudi.client.HoodieJavaWriteClient;
-import org.apache.hudi.client.HoodieTimelineArchiver;
 import org.apache.hudi.client.WriteStatus;
+import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
+import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
@@ -59,7 +60,6 @@ import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.timeline.TimelineUtils;
 import org.apache.hudi.common.table.view.TableFileSystemView;
 import org.apache.hudi.common.util.CleanerUtils;
@@ -70,9 +70,10 @@ import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieCleanConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
-import org.apache.hudi.hadoop.CachingPath;
+import org.apache.hudi.hadoop.fs.CachingPath;
 import org.apache.hudi.metadata.HoodieTableMetadataWriter;
 import org.apache.hudi.table.HoodieJavaTable;
+import org.apache.hudi.table.HoodieTable;
 import org.apache.hudi.table.action.clean.CleanPlanner;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -523,11 +524,9 @@ public class HudiConversionTarget implements ConversionTarget {
         HoodieInstant requestedCleanInstant =
             new HoodieInstant(
                 HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime);
-        activeTimeline.saveToCleanRequested(
-            requestedCleanInstant, TimelineMetadataUtils.serializeCleanerPlan(cleanerPlan));
+        activeTimeline.saveToCleanRequested(requestedCleanInstant, Option.of(cleanerPlan));
         HoodieInstant inflightClean =
-            activeTimeline.transitionCleanRequestedToInflight(
-                requestedCleanInstant, Option.empty());
+            activeTimeline.transitionCleanRequestedToInflight(requestedCleanInstant);
         List<HoodieCleanStat> cleanStats =
             cleanInfoPerPartition.entrySet().stream()
                 .map(
@@ -548,24 +547,28 @@ public class HudiConversionTarget implements ConversionTarget {
                     })
                 .collect(Collectors.toList());
         HoodieCleanMetadata cleanMetadata =
-            CleanerUtils.convertCleanMetadata(cleanTime, Option.empty(), cleanStats);
+            CleanerUtils.convertCleanMetadata(
+                cleanTime, Option.empty(), cleanStats, Collections.emptyMap());
         // update the metadata table with the clean metadata so the files' metadata are marked for
         // deletion
         hoodieTableMetadataWriter.performTableServices(Option.empty());
         hoodieTableMetadataWriter.update(cleanMetadata, cleanTime);
         // mark the commit as complete on the table timeline
         activeTimeline.transitionCleanInflightToComplete(
-            inflightClean, TimelineMetadataUtils.serializeCleanMetadata(cleanMetadata));
+            false, inflightClean, Option.of(cleanMetadata));
       } catch (Exception ex) {
         throw new UpdateException("Unable to clean Hudi timeline", ex);
       }
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void runArchiver(
         HoodieJavaTable<?> table, HoodieWriteConfig config, HoodieEngineContext engineContext) {
       // trigger archiver manually
       try {
-        HoodieTimelineArchiver archiver = new HoodieTimelineArchiver(config, table);
+        HoodieTimelineArchiver<?, ?, ?, ?> archiver =
+            TimelineArchivers.getInstance(
+                table.getMetaClient().getTimelineLayoutVersion(), config, (HoodieTable) table);
         archiver.archiveIfRequired(engineContext, true);
       } catch (IOException ex) {
         throw new UpdateException("Unable to archive Hudi timeline", ex);
@@ -587,7 +590,7 @@ public class HudiConversionTarget implements ConversionTarget {
       properties.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
       return HoodieWriteConfig.newBuilder()
           .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
-          .withPath(metaClient.getBasePathV2().toString())
+          .withPath(metaClient.getBasePath().toString())
           .withPopulateMetaFields(metaClient.getTableConfig().populateMetaFields())
           .withEmbeddedTimelineServerEnabled(false)
           .withSchema(schema == null ? "" : schema.toString())

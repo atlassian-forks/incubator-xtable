@@ -34,6 +34,7 @@ import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.VisibleForTesting;
 import org.apache.hudi.exception.TableNotFoundException;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.xtable.exception.PartitionSpecException;
 import org.apache.xtable.exception.UpdateException;
@@ -68,7 +69,7 @@ public class HudiTableManager {
       return Optional.of(
           HoodieTableMetaClient.builder()
               .setBasePath(tableDataPath)
-              .setConf(configuration)
+              .setConf(new HadoopStorageConfiguration(configuration))
               .setLoadActiveTimelineOnLoad(false)
               .build());
     } catch (TableNotFoundException ex) {
@@ -102,7 +103,7 @@ public class HudiTableManager {
     boolean hiveStylePartitioningEnabled =
         DataLayoutStrategy.HIVE_STYLE_PARTITION == table.getLayoutStrategy();
     try {
-      return HoodieTableMetaClient.withPropertyBuilder()
+      return HoodieTableMetaClient.newTableBuilder()
           .setCommitTimezone(HoodieTimelineTimeZone.UTC)
           .setHiveStylePartitioningEnable(hiveStylePartitioningEnabled)
           .setTableType(HoodieTableType.COPY_ON_WRITE)
@@ -117,7 +118,7 @@ public class HudiTableManager {
                   .map(InternalPartitionField::getSourceField)
                   .map(InternalField::getPath)
                   .collect(Collectors.joining(",")))
-          .initTable(configuration, tableDataPath);
+          .initTable(new HadoopStorageConfiguration(configuration), tableDataPath);
     } catch (IOException ex) {
       throw new UpdateException("Unable to initialize Hudi table", ex);
     }
