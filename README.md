@@ -114,7 +114,20 @@ catalogOptions: # all other options are passed through in a map
   key1: value1
   key2: value2
 ```
-5. Run with `java -jar xtable-utilities/target/xtable-utilities_2.12-0.2.0-SNAPSHOT-bundled.jar --datasetConfig my_config.yaml [--hadoopConfig hdfs-site.xml] [--convertersConfig converters.yaml] [--icebergCatalogConfig catalog.yaml]`
+5. Run the following command:
+```shell
+XTABLE_DIR="${HOME}/repos/incubator-xtable"
+CONFIG="xtable.yaml"
+JAR_VERSION="2.13-0.3.0-incubating-bundled"
+
+java \
+    --add-opens java.base/sun.nio.ch=ALL-UNNAMED \
+    -jar ${XTABLE_DIR}/xtable-utilities/target/xtable-utilities_${JAR_VERSION}.jar \
+    --datasetConfig ${CONFIG} \
+    | tee -a xtable.log
+```
+
+Original command: `java -jar xtable-utilities/target/xtable-utilities_2.12-0.2.0-SNAPSHOT-bundled.jar --datasetConfig my_config.yaml [--hadoopConfig hdfs-site.xml] [--convertersConfig converters.yaml] [--icebergCatalogConfig catalog.yaml]`
 The bundled jar includes hadoop dependencies for AWS, Azure, and GCP. Sample hadoop configurations for configuring the converters 
 can be found in the [xtable-hadoop-defaults.xml](https://github.com/apache/incubator-xtable/blob/main/xtable-utilities/src/main/resources/xtable-hadoop-defaults.xml) file.
 The custom hadoop configurations can be passed in with the `--hadoopConfig [custom-hadoop-config-file]` option.

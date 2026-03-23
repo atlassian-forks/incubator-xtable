@@ -136,10 +136,6 @@
             <groupId>org.apache.hadoop</groupId>
             <artifactId>hadoop-aws</artifactId>
         </dependency>
-        <dependency>
-            <groupId>software.amazon.awssdk</groupId>
-            <artifactId>bundle</artifactId>
-        </dependency>
 
         <!-- Azure Dependencies -->
         <dependency>
