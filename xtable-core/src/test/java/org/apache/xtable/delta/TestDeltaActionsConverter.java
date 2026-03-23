@@ -49,8 +49,17 @@ class TestDeltaActionsConverter {
     DeletionVectorDescriptor deletionVector = null;
     AddFile addFileAction =
         new AddFile(
-            filePath, null, size, time, dataChange, stats, null, deletionVector,
-            scala.Option.empty(), scala.Option.empty(), scala.Option.empty());
+            filePath,
+            null,
+            size,
+            time,
+            dataChange,
+            stats,
+            null,
+            deletionVector,
+            scala.Option.empty(),
+            scala.Option.empty(),
+            scala.Option.empty());
     Assertions.assertNull(actionsConverter.extractDeletionVectorFile(snapshot, addFileAction));
 
     deletionVector =
@@ -59,8 +68,17 @@ class TestDeltaActionsConverter {
 
     addFileAction =
         new AddFile(
-            filePath, null, size, time, dataChange, stats, null, deletionVector,
-            scala.Option.empty(), scala.Option.empty(), scala.Option.empty());
+            filePath,
+            null,
+            size,
+            time,
+            dataChange,
+            stats,
+            null,
+            deletionVector,
+            scala.Option.empty(),
+            scala.Option.empty(),
+            scala.Option.empty());
 
     Mockito.when(snapshot.deltaLog()).thenReturn(deltaLog);
     Mockito.when(deltaLog.dataPath())

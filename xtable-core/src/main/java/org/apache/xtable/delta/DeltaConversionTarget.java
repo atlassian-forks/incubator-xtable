@@ -43,7 +43,6 @@ import org.apache.spark.sql.delta.DeltaConfigs;
 import org.apache.spark.sql.delta.DeltaLog;
 import org.apache.spark.sql.delta.DeltaOperations;
 import org.apache.spark.sql.delta.OptimisticTransaction;
-import org.apache.spark.sql.delta.Snapshot;
 import org.apache.spark.sql.delta.actions.Action;
 import org.apache.spark.sql.delta.actions.AddFile;
 import org.apache.spark.sql.delta.actions.CommitInfo;
@@ -192,9 +191,7 @@ public class DeltaConversionTarget implements ConversionTarget {
         (Seq<Action>)
             scala.collection.immutable.List$.MODULE$.from(
                 dataFileUpdatesExtractor.applySnapshot(
-                    deltaLog,
-                    partitionedDataFiles,
-                    transactionState.getLatestSchemaInternal())));
+                    deltaLog, partitionedDataFiles, transactionState.getLatestSchemaInternal())));
   }
 
   @Override

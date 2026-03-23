@@ -435,11 +435,27 @@ public class TestBaseFileUpdatesExtractor {
     columnStats.put(
         "long_field",
         HoodieColumnRangeMetadata.<Comparable>create(
-            fileName, "long_field", 10L, 20L, 4, 5, 123L, -1L, ValueMetadata.V1EmptyMetadata.get()));
+            fileName,
+            "long_field",
+            10L,
+            20L,
+            4,
+            5,
+            123L,
+            -1L,
+            ValueMetadata.V1EmptyMetadata.get()));
     columnStats.put(
         "string_field",
         HoodieColumnRangeMetadata.<Comparable>create(
-            fileName, "string_field", "a", "c", 1, 6, 500L, -1L, ValueMetadata.V1EmptyMetadata.get()));
+            fileName,
+            "string_field",
+            "a",
+            "c",
+            1,
+            6,
+            500L,
+            -1L,
+            ValueMetadata.V1EmptyMetadata.get()));
     columnStats.put(
         "null_string_field",
         HoodieColumnRangeMetadata.<Comparable>create(
