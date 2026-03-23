@@ -254,7 +254,7 @@ public class BaseFileUpdatesExtractor {
                       columnStat.getNumValues(),
                       columnStat.getTotalSize(),
                       -1L,
-                      ValueMetadata.NULL_METADATA);
+                      ValueMetadata.V1EmptyMetadata.get());
               result.put(metadata.getColumnName(), metadata);
             });
     return result;

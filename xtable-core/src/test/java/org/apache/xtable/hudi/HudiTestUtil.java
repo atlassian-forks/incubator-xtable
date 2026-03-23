@@ -38,16 +38,16 @@ import org.apache.spark.serializer.KryoSerializer;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class HudiTestUtil {
@@ -69,6 +69,8 @@ public class HudiTestUtil {
   }
 
   static HoodieWriteConfig getHoodieWriteConfig(HoodieTableMetaClient metaClient, Schema schema) {
+    boolean isNonPartitioned =
+        metaClient.getTableConfig().getPartitionFields().map(a -> a.length == 0).orElse(true);
     Properties properties = new Properties();
     properties.setProperty(HoodieMetadataConfig.AUTO_INITIALIZE.key(), "false");
     return HoodieWriteConfig.newBuilder()
@@ -80,7 +82,7 @@ public class HudiTestUtil {
             HoodieMetadataConfig.newBuilder()
                 .withMaxNumDeltaCommitsBeforeCompaction(2)
                 .enable(true)
-                .withMetadataIndexColumnStats(true)
+                .withMetadataIndexColumnStats(isNonPartitioned)
                 .withProperties(properties)
                 .build())
         .withArchivalConfig(HoodieArchivalConfig.newBuilder().archiveCommitsWith(1, 2).build())

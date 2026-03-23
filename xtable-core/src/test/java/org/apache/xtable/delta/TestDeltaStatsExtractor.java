@@ -125,7 +125,10 @@ public class TestDeltaStatsExtractor {
     String stats =
         DeltaStatsExtractor.getInstance()
             .convertStatsToDeltaFormat(schema, numRecords, columnStats);
-    AddFile addFile = new AddFile("file://path/to/file", null, 0, 0, true, stats, null, null);
+    AddFile addFile =
+        new AddFile(
+            "file://path/to/file", null, 0, 0, true, stats, null, null,
+            scala.Option.empty(), scala.Option.empty(), scala.Option.empty());
     DeltaStatsExtractor extractor = DeltaStatsExtractor.getInstance();
     FileStats actual = extractor.getColumnStatsForFile(addFile, fields);
     List<ColumnStat> actualColumStats = actual.getColumnStats();
@@ -161,7 +164,10 @@ public class TestDeltaStatsExtractor {
     deltaStats.put("tightBounds", Boolean.TRUE);
     deltaStats.put("nonExisting", minValues);
     String stats = MAPPER.writeValueAsString(deltaStats);
-    AddFile addFile = new AddFile("file://path/to/file", null, 0, 0, true, stats, null, null);
+    AddFile addFile =
+        new AddFile(
+            "file://path/to/file", null, 0, 0, true, stats, null, null,
+            scala.Option.empty(), scala.Option.empty(), scala.Option.empty());
     DeltaStatsExtractor extractor = DeltaStatsExtractor.getInstance();
     FileStats actual = extractor.getColumnStatsForFile(addFile, fields);
     List<ColumnStat> actualColumStats = actual.getColumnStats();
@@ -204,7 +210,10 @@ public class TestDeltaStatsExtractor {
   @Test
   void convertNullStatsToInternalRepresentation() {
     List<InternalField> fields = getSchemaFields();
-    AddFile addFile = new AddFile("file://path/to/file", null, 0, 0, true, null, null, null);
+    AddFile addFile =
+        new AddFile(
+            "file://path/to/file", null, 0, 0, true, null, null, null,
+            scala.Option.empty(), scala.Option.empty(), scala.Option.empty());
     DeltaStatsExtractor extractor = DeltaStatsExtractor.getInstance();
     FileStats actual = extractor.getColumnStatsForFile(addFile, fields);
     List<ColumnStat> actualColumStats = actual.getColumnStats();

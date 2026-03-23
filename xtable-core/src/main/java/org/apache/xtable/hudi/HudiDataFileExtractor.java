@@ -155,8 +155,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
       switch (instant.getAction()) {
         case HoodieTimeline.COMMIT_ACTION:
         case HoodieTimeline.DELTA_COMMIT_ACTION:
-          HoodieCommitMetadata commitMetadata =
-              timeline.readCommitMetadata(instant);
+          HoodieCommitMetadata commitMetadata = timeline.readCommitMetadata(instant);
           commitMetadata
               .getPartitionToWriteStats()
               .forEach(
@@ -177,8 +176,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
                   });
           break;
         case HoodieTimeline.REPLACE_COMMIT_ACTION:
-          HoodieReplaceCommitMetadata replaceMetadata =
-              timeline.readReplaceCommitMetadata(instant);
+          HoodieReplaceCommitMetadata replaceMetadata = timeline.readReplaceCommitMetadata(instant);
 
           replaceMetadata
               .getPartitionToReplaceFileIds()
@@ -205,8 +203,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
                   });
           break;
         case HoodieTimeline.ROLLBACK_ACTION:
-          HoodieRollbackMetadata rollbackMetadata =
-              timeline.readRollbackMetadata(instant);
+          HoodieRollbackMetadata rollbackMetadata = timeline.readRollbackMetadata(instant);
           rollbackMetadata
               .getPartitionMetadata()
               .forEach(
@@ -216,8 +213,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
                               partition, metadata.getSuccessDeleteFiles(), partitioningFields)));
           break;
         case HoodieTimeline.RESTORE_ACTION:
-          HoodieRestoreMetadata restoreMetadata =
-              timeline.readRestoreMetadata(instant);
+          HoodieRestoreMetadata restoreMetadata = timeline.readRestoreMetadata(instant);
           restoreMetadata
               .getHoodieRestoreMetadata()
               .forEach(

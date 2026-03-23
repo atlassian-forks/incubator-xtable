@@ -44,7 +44,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -333,7 +333,6 @@ public class ITDeltaConversionSource {
         snapshot.getPartitionedDataFiles().get(0));
   }
 
-  @Disabled("Requires Spark 3.4.0+")
   @Test
   void getCurrentSnapshotGenColPartitionedTest() {
     // Table name

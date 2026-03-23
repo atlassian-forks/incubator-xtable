@@ -130,7 +130,7 @@ public class DeltaConversionTarget implements ConversionTarget {
     DeltaLog deltaLog = DeltaLog.forTable(sparkSession, tableDataPath);
     boolean deltaTableExists = deltaLog.tableExists();
     if (!deltaTableExists) {
-      deltaLog.ensureLogDirectoryExist();
+      deltaLog.createLogDirectoriesIfNotExists();
     }
     this.schemaExtractor = schemaExtractor;
     this.partitionExtractor = partitionExtractor;
@@ -186,23 +186,27 @@ public class DeltaConversionTarget implements ConversionTarget {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public void syncFilesForSnapshot(List<PartitionFileGroup> partitionedDataFiles) {
     transactionState.setActions(
-        dataFileUpdatesExtractor
-            .applySnapshot(
-                deltaLog, partitionedDataFiles, transactionState.getLatestSchemaInternal())
-            .toList());
+        (Seq<Action>)
+            scala.collection.immutable.List$.MODULE$.from(
+                dataFileUpdatesExtractor.applySnapshot(
+                    deltaLog,
+                    partitionedDataFiles,
+                    transactionState.getLatestSchemaInternal())));
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public void syncFilesForDiff(InternalFilesDiff internalFilesDiff) {
     transactionState.setActions(
-        dataFileUpdatesExtractor
-            .applyDiff(
-                internalFilesDiff,
-                transactionState.getLatestSchemaInternal(),
-                deltaLog.dataPath().toString())
-            .toList());
+        (Seq<Action>)
+            scala.collection.immutable.List$.MODULE$.from(
+                dataFileUpdatesExtractor.applyDiff(
+                    internalFilesDiff,
+                    transactionState.getLatestSchemaInternal(),
+                    deltaLog.dataPath().toString())));
   }
 
   @Override
@@ -228,15 +232,11 @@ public class DeltaConversionTarget implements ConversionTarget {
 
   @Override
   public Optional<String> getTargetCommitIdentifier(String sourceIdentifier) {
-    Snapshot currentSnapshot = deltaLog.currentSnapshot().snapshot();
-
     Iterator<Tuple2<Object, Seq<Action>>> versionIterator =
-        JavaConverters.asJavaIteratorConverter(
-                deltaLog.getChanges(currentSnapshot.version(), false))
-            .asJava();
+        JavaConverters.asJavaIteratorConverter(deltaLog.getChanges(0, false)).asJava();
     while (versionIterator.hasNext()) {
       Tuple2<Object, Seq<Action>> currentChange = versionIterator.next();
-      Long targetVersion = currentSnapshot.version();
+      Long targetVersion = (Long) currentChange._1();
       List<Action> actions = JavaConverters.seqAsJavaListConverter(currentChange._2()).asJava();
 
       // Find the CommitInfo in the changes belongs to certain version

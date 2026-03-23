@@ -67,7 +67,6 @@ import org.apache.spark.sql.delta.GeneratedColumn;
 
 import scala.collection.JavaConverters;
 
-
 import io.delta.standalone.DeltaLog;
 import io.delta.standalone.DeltaScan;
 import io.delta.standalone.Snapshot;
@@ -358,7 +357,7 @@ public class TestDeltaSync {
             .expr();
     org.apache.spark.sql.delta.DeltaLog deltaLog =
         org.apache.spark.sql.delta.DeltaLog.forTable(sparkSession, basePath.toString());
-    org.apache.spark.sql.delta.Snapshot snapshot = deltaLog.getSnapshotAtInit().snapshot();
+    org.apache.spark.sql.delta.Snapshot snapshot = deltaLog.unsafeVolatileSnapshot();
     scala.collection.immutable.Seq<org.apache.spark.sql.catalyst.expressions.Expression>
         expressionSeq =
             scala.collection.JavaConverters.asScalaBuffer(Collections.singletonList(expression))

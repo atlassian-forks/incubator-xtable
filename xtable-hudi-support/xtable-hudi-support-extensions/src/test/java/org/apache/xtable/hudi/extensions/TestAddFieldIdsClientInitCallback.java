@@ -18,11 +18,9 @@
  
 package org.apache.xtable.hudi.extensions;
 
-import static org.apache.hudi.common.table.HoodieTableConfig.HOODIE_TABLE_NAME_KEY;
-import static org.apache.hudi.common.table.HoodieTableConfig.VERSION;
-import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.PARTITIONPATH_FIELD_NAME;
-import static org.apache.hudi.keygen.constant.KeyGeneratorOptions.RECORDKEY_FIELD_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -41,7 +39,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.client.BaseHoodieClient;
 import org.apache.hudi.client.HoodieJavaWriteClient;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
@@ -52,11 +49,11 @@ import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.index.HoodieIndex;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.xtable.hudi.idtracking.IdTracker;
 
@@ -81,7 +78,8 @@ public class TestAddFieldIdsClientInitCallback {
     Schema inputSchema = getSchemaStub(1);
     Schema updatedSchema = getSchemaStub(3);
 
-    HoodieEngineContext localEngineContext = new HoodieLocalEngineContext(new Configuration());
+    HoodieEngineContext localEngineContext =
+        new HoodieLocalEngineContext(new HadoopStorageConfiguration(new Configuration()));
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder()
             .withSchema(inputSchema.toString())
@@ -105,7 +103,8 @@ public class TestAddFieldIdsClientInitCallback {
     Schema inputSchema = getSchemaStub(2);
     Schema updatedSchema = getSchemaStub(3);
 
-    HoodieEngineContext localEngineContext = new HoodieJavaEngineContext(new Configuration());
+    HoodieEngineContext localEngineContext =
+        new HoodieJavaEngineContext(new HadoopStorageConfiguration(new Configuration()));
     String basePath = getTableBasePath();
     HoodieWriteConfig tableConfig =
         HoodieWriteConfig.newBuilder()
@@ -113,20 +112,19 @@ public class TestAddFieldIdsClientInitCallback {
             .withPopulateMetaFields(true)
             .withIndexConfig(
                 HoodieIndexConfig.newBuilder().withIndexType(HoodieIndex.IndexType.BLOOM).build())
+            .withEmbeddedTimelineServerEnabled(false)
             .withPath(basePath)
             .build();
 
     // create a commit to create an initial schema
     try (HoodieJavaWriteClient<HoodieAvroPayload> hoodieJavaWriteClient =
         new HoodieJavaWriteClient<>(localEngineContext, tableConfig)) {
-      Properties properties = new Properties();
-      properties.setProperty(HOODIE_TABLE_NAME_KEY, "test_table");
-      properties.setProperty(PARTITIONPATH_FIELD_NAME.key(), "");
-      properties.setProperty(RECORDKEY_FIELD_NAME.key(), "id");
-      properties.setProperty(
-          VERSION.key(), Integer.toString(HoodieTableVersion.current().versionCode()));
-      HoodieTableMetaClient.initTableAndGetMetaClient(
-          localEngineContext.getHadoopConf().get(), basePath, properties);
+      HoodieTableMetaClient.newTableBuilder()
+          .setTableName("test_table")
+          .setTableType(org.apache.hudi.common.model.HoodieTableType.COPY_ON_WRITE)
+          .setPartitionFields("")
+          .setRecordKeyFields("id")
+          .initTable(localEngineContext.getStorageConf(), basePath);
       String commit = hoodieJavaWriteClient.startCommit();
       GenericRecord genericRecord =
           new GenericRecordBuilder(existingSchema).set("id", "1").set("field", "value").build();
@@ -145,9 +143,7 @@ public class TestAddFieldIdsClientInitCallback {
 
     BaseHoodieClient client = setBaseHoodieClientMocks(localEngineContext, config);
 
-    when(mockIdTracker.addIdTracking(
-            inputSchema, Option.of(HoodieAvroUtils.addMetadataFields(existingSchema)), false))
-        .thenReturn(updatedSchema);
+    when(mockIdTracker.addIdTracking(eq(inputSchema), any(), eq(false))).thenReturn(updatedSchema);
 
     callback.call(client);
 
@@ -166,7 +162,8 @@ public class TestAddFieldIdsClientInitCallback {
     properties.setProperty(
         HoodieWriteConfig.WRITE_SCHEMA_OVERRIDE.key(), inputWriteSchema.toString());
 
-    HoodieEngineContext localEngineContext = new HoodieLocalEngineContext(new Configuration());
+    HoodieEngineContext localEngineContext =
+        new HoodieLocalEngineContext(new HadoopStorageConfiguration(new Configuration()));
     HoodieWriteConfig config =
         HoodieWriteConfig.newBuilder()
             .withSchema(inputSchema.toString())

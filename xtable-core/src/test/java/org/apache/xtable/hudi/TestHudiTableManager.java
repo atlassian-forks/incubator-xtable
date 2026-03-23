@@ -112,7 +112,7 @@ public class TestHudiTableManager {
     assertEquals(
         Arrays.asList(recordKeyField),
         Arrays.asList(metaClient.getTableConfig().getRecordKeyFields().get()));
-    assertEquals(tableBasePath, metaClient.getBasePath());
+    assertEquals(tableBasePath, metaClient.getBasePath().toString());
     assertEquals(tableName, metaClient.getTableConfig().getTableName());
     assertEquals(
         "org.apache.hudi.keygen.ComplexKeyGenerator",
@@ -135,7 +135,7 @@ public class TestHudiTableManager {
     assertEquals(
         Collections.singletonList("timestamp"),
         Arrays.asList(metaClient.getTableConfig().getPartitionFields().get()));
-    assertEquals(tableBasePath, metaClient.getBasePath());
+    assertEquals(tableBasePath, metaClient.getBasePath().toString());
     assertEquals("test_table", metaClient.getTableConfig().getTableName());
   }
 

@@ -59,8 +59,8 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.xtable.GenericTable;
 import org.apache.xtable.TestJavaHudiTable;

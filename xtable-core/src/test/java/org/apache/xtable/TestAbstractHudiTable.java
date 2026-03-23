@@ -84,6 +84,7 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
@@ -100,7 +101,6 @@ import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import com.google.common.base.Preconditions;
@@ -128,6 +128,7 @@ public abstract class TestAbstractHudiTable
       throw new UncheckedIOException(ex);
     }
   }
+
   // Name of the table
   protected String tableName;
   // Base path for the table
@@ -355,8 +356,7 @@ public abstract class TestAbstractHudiTable
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline().reload();
       HoodieInstant restoreInstant = activeTimeline.getRestoreTimeline().firstInstant().get();
       try {
-        HoodieRestoreMetadata instantMetadata =
-            activeTimeline.readRestoreMetadata(restoreInstant);
+        HoodieRestoreMetadata instantMetadata = activeTimeline.readRestoreMetadata(restoreInstant);
         assertTrue(
             instantMetadata.getHoodieRestoreMetadata().values().stream()
                 .flatMap(
@@ -434,7 +434,7 @@ public abstract class TestAbstractHudiTable
             // enable col stats only on un-partitioned data due to bug in Hudi
             // https://issues.apache.org/jira/browse/HUDI-6954
             .withMetadataIndexColumnStats(
-                !keyGenProperties.getString(PARTITIONPATH_FIELD_NAME.key(), "").isEmpty())
+                keyGenProperties.getString(PARTITIONPATH_FIELD_NAME.key(), "").isEmpty())
             .withColumnStatsIndexForColumns(getColumnsFromSchema(schema))
             .build();
     Properties lockProperties = new Properties();
@@ -590,7 +590,8 @@ public abstract class TestAbstractHudiTable
   protected HoodieTableMetaClient getMetaClient(
       TypedProperties keyGenProperties, HoodieTableType hoodieTableType, Configuration conf) {
     HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(conf);
-    LocalFileSystem fs = (LocalFileSystem) FileSystem.get(new org.apache.hadoop.fs.Path(basePath).toUri(), conf);
+    LocalFileSystem fs =
+        (LocalFileSystem) FileSystem.get(new org.apache.hadoop.fs.Path(basePath).toUri(), conf);
     // Enforce checksum such that fs.open() is consistent to DFS
     fs.setVerifyChecksum(true);
     fs.mkdirs(new org.apache.hadoop.fs.Path(basePath));

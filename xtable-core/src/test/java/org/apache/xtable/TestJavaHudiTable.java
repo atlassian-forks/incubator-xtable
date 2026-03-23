@@ -43,7 +43,6 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -58,6 +57,7 @@ import org.apache.hudi.config.HoodieClusteringConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.keygen.CustomKeyGenerator;
 import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import com.google.common.base.Preconditions;
 
@@ -67,6 +67,7 @@ public class TestJavaHudiTable extends TestAbstractHudiTable {
   private HoodieJavaWriteClient<HoodieAvroPayload> writeClient;
 
   private final Configuration conf;
+
   /**
    * Create a test table instance for general testing. The table is created with the schema defined
    * in basic_schema.avsc which contains many data types to ensure they are handled correctly.

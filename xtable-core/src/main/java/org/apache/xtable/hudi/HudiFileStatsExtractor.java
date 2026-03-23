@@ -23,6 +23,8 @@ import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.sql.Date;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -92,11 +94,17 @@ public class HudiFileStatsExtractor {
             && metaClient
                 .getTableConfig()
                 .isMetadataPartitionAvailable(MetadataPartitionType.COLUMN_STATS);
+    boolean useParquetElementNaming =
+        useMetadataTableColStats
+            || HoodieIndexVersion.getCurrentVersion(
+                    metaClient.getTableConfig().getTableVersion(),
+                    MetadataPartitionType.COLUMN_STATS)
+                .greaterThanOrEquals(HoodieIndexVersion.V2);
     final Map<String, InternalField> nameFieldMap =
         schema.getAllFields().stream()
             .collect(
                 Collectors.toMap(
-                    field -> getFieldNameForStats(field, useMetadataTableColStats),
+                    field -> getFieldNameForStats(field, useParquetElementNaming),
                     Function.identity()));
     return useMetadataTableColStats
         ? computeColumnStatsFromMetadataTable(metadataTable, files, nameFieldMap)
@@ -277,13 +285,20 @@ public class HudiFileStatsExtractor {
   }
 
   private static Comparable convertValue(Comparable value, InternalType type) {
-    // Special type handling
     if (value == null) {
       return value;
     }
     Comparable result = value;
     if (value instanceof Date) {
-      result = dateToDaysSinceEpoch(value);
+      result = (int) ((Date) value).toLocalDate().toEpochDay();
+    } else if (value instanceof LocalDate) {
+      result = (int) ((LocalDate) value).toEpochDay();
+    } else if (type == InternalType.DATE && (value instanceof String)) {
+      result = (int) LocalDate.parse((String) value).toEpochDay();
+    } else if (value instanceof Instant) {
+      result = ((Instant) value).toEpochMilli();
+    } else if (type == InternalType.TIMESTAMP_NTZ && (value instanceof String)) {
+      result = Instant.parse((String) value).toEpochMilli();
     } else if (type == InternalType.ENUM && (value instanceof ByteBuffer)) {
       result = new String(((ByteBuffer) value).array());
     } else if (type == InternalType.FIXED && (value instanceof Binary)) {
@@ -292,14 +307,9 @@ public class HudiFileStatsExtractor {
     return result;
   }
 
-  private static int dateToDaysSinceEpoch(Object date) {
-    return (int) ((Date) date).toLocalDate().toEpochDay();
-  }
-
-  private String getFieldNameForStats(InternalField field, boolean isReadFromMetadataTable) {
+  private String getFieldNameForStats(InternalField field, boolean useParquetElementNaming) {
     String convertedDotPath = HudiSchemaExtractor.convertFromXTablePath(field.getPath());
-    // the array field naming is different for metadata table
-    if (isReadFromMetadataTable) {
+    if (useParquetElementNaming) {
       return convertedDotPath.replace(ARRAY_DOT_FIELD, PARQUET_ELMENT_DOT_FIELD);
     }
     return convertedDotPath;

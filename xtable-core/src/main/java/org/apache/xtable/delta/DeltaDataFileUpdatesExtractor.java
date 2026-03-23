@@ -122,7 +122,10 @@ public class DeltaDataFileUpdatesExtractor {
             true,
             getColumnStats(schema, dataFile.getRecordCount(), dataFile.getColumnStats()),
             null,
-            null));
+            null,
+            scala.Option.empty(),
+            scala.Option.empty(),
+            scala.Option.empty()));
   }
 
   private String getColumnStats(

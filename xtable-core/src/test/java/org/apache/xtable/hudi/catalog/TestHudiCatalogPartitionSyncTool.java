@@ -178,10 +178,7 @@ public class TestHudiCatalogPartitionSyncTool {
               "101",
               "1100",
               Comparator.naturalOrder());
-      when(mockTimeline.countInstants()).thenReturn(2);
       when(mockTimeline.lastInstant()).thenReturn(Option.of(instant2));
-      when(mockTimeline.getInstantsOrderedByCompletionTime())
-          .thenReturn(Stream.of(instant1, instant2));
       when(mockMetaClient.getActiveTimeline()).thenReturn(mockTimeline);
 
       CatalogPartition p1 =
@@ -250,8 +247,6 @@ public class TestHudiCatalogPartitionSyncTool {
       when(mockHudiTableManager.loadTableMetaClientIfExists(TEST_BASE_PATH))
           .thenReturn(Optional.of(mockMetaClient));
       when(mockMetaClient.getBasePath()).thenReturn(testBaseStoragePath);
-      when(mockMetaClient.getTableConfig()).thenReturn(mockTableConfig);
-      when(mockTableConfig.isMetadataTableAvailable()).thenReturn(false);
       when(mockPartitionValueExtractor.extractPartitionValuesInPath(partitionKey2))
           .thenReturn(Collections.singletonList(partitionKey2));
       when(mockPartitionValueExtractor.extractPartitionValuesInPath(partitionKey3))
@@ -273,10 +268,7 @@ public class TestHudiCatalogPartitionSyncTool {
               "1100",
               Comparator.naturalOrder());
 
-      when(mockTimeline.countInstants()).thenReturn(2);
       when(mockTimeline.lastInstant()).thenReturn(Option.of(instant2));
-      when(mockTimeline.getInstantsOrderedByCompletionTime())
-          .thenReturn(Stream.of(instant1, instant2));
       when(mockMetaClient.getActiveTimeline()).thenReturn(mockTimeline);
 
       Map<String, String> lastSyncedTimeProperties = new HashMap<>();

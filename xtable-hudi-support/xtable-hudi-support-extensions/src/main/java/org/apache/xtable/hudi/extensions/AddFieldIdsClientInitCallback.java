@@ -21,17 +21,16 @@ package org.apache.xtable.hudi.extensions;
 import lombok.extern.slf4j.Slf4j;
 
 import org.apache.avro.Schema;
-import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileSystem;
 
 import org.apache.hudi.callback.HoodieClientInitCallback;
 import org.apache.hudi.client.BaseHoodieClient;
-import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.TableSchemaResolver;
 import org.apache.hudi.common.util.Option;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.exception.HoodieException;
+import org.apache.hudi.storage.HoodieStorage;
+import org.apache.hudi.storage.StorageConfiguration;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -63,15 +62,15 @@ public class AddFieldIdsClientInitCallback implements HoodieClientInitCallback {
       try {
         Option<Schema> currentSchema = Option.empty();
         try {
-          Configuration hadoopConfiguration = hoodieClient.getEngineContext().getHadoopConf().get();
+          StorageConfiguration<?> storageConf = hoodieClient.getEngineContext().getStorageConf();
           String tableBasePath = config.getBasePath();
-          FileSystem fs = FSUtils.getFs(tableBasePath, hadoopConfiguration);
-          if (FSUtils.isTableExists(config.getBasePath(), fs)) {
-            HoodieTableMetaClient metaClient =
-                HoodieTableMetaClient.builder()
-                    .setConf(hadoopConfiguration)
-                    .setBasePath(tableBasePath)
-                    .build();
+          HoodieTableMetaClient metaClient =
+              HoodieTableMetaClient.builder()
+                  .setConf(storageConf)
+                  .setBasePath(tableBasePath)
+                  .build();
+          HoodieStorage storage = metaClient.getStorage();
+          if (storage.exists(metaClient.getBasePath())) {
             currentSchema =
                 new TableSchemaResolver(metaClient).getTableAvroSchemaFromLatestCommit(true);
           }

@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -55,17 +54,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
-import org.apache.hudi.metadata.HoodieBackedTableMetadata;
-import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroPayload;
+import org.apache.hudi.common.table.HoodieTableConfig;
+import org.apache.hudi.common.table.HoodieTableVersion;
 import org.apache.hudi.common.model.HoodieAvroRecord;
 import org.apache.hudi.common.model.HoodieKey;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.Option;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
+import org.apache.hudi.storage.hadoop.HoodieHadoopStorage;
 
 import org.apache.xtable.GenericTable;
 import org.apache.xtable.TestJavaHudiTable;
@@ -202,6 +204,12 @@ public class TestHudiFileStatsExtractor {
 
     HoodieTableMetaClient mockMetaClient = mock(HoodieTableMetaClient.class);
     doReturn(new HadoopStorageConfiguration(configuration)).when(mockMetaClient).getStorageConf();
+    HoodieTableConfig mockTableConfig = mock(HoodieTableConfig.class);
+    doReturn(HoodieTableVersion.SIX).when(mockTableConfig).getTableVersion();
+    doReturn(mockTableConfig).when(mockMetaClient).getTableConfig();
+    doReturn(new HoodieHadoopStorage(file.toString(), configuration))
+        .when(mockMetaClient)
+        .getStorage();
     HudiFileStatsExtractor fileStatsExtractor = new HudiFileStatsExtractor(mockMetaClient);
     List<InternalDataFile> output =
         fileStatsExtractor

@@ -39,7 +39,6 @@ import org.apache.spark.serializer.KryoSerializer;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.StructType;
 import org.junit.jupiter.api.BeforeAll;
@@ -87,6 +86,7 @@ public class TestXTableSyncTool {
     options.put(DataSourceWriteOptions.RECORDKEY_FIELD().key(), "key");
     options.put(DataSourceWriteOptions.PARTITIONPATH_FIELD().key(), partitionPath);
     options.put("hoodie.table.name", tableName);
+    options.put("hoodie.embed.timeline.server", "false");
     if (partitionPath.contains("TIMESTAMP")) {
       // set custom key gen properties
       options.put("hoodie.keygen.timebased.timestamp.type", "EPOCHMILLISECONDS");
@@ -124,7 +124,7 @@ public class TestXTableSyncTool {
     Row row2 = RowFactory.create("key2", partition, timestamp, "value2");
     Row row3 = RowFactory.create("key3", partition, timestamp, "value3");
     spark
-        .createDataset(Arrays.asList(row1, row2, row3), RowEncoder.apply(schema))
+        .createDataFrame(Arrays.asList(row1, row2, row3), schema)
         .write()
         .format("hudi")
         .options(options)
