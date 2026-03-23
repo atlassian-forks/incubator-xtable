@@ -57,6 +57,7 @@ import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.LocalFileSystem;
 
 import org.apache.hudi.avro.model.HoodieCleanMetadata;
@@ -83,7 +84,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.marker.MarkerType;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.JsonUtils;
 import org.apache.hudi.common.util.Option;
@@ -100,7 +100,8 @@ import org.apache.hudi.keygen.NonpartitionedKeyGenerator;
 import org.apache.hudi.keygen.SimpleKeyGenerator;
 import org.apache.hudi.keygen.TimestampBasedKeyGenerator;
 import org.apache.hudi.keygen.constant.KeyGeneratorOptions;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import com.google.common.base.Preconditions;
 
@@ -291,11 +292,11 @@ public abstract class TestAbstractHudiTable
 
   public List<String> getAllLatestBaseFilePaths() {
     HoodieTableFileSystemView fsView =
-        new HoodieMetadataFileSystemView(
+        FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(
             getWriteClient().getEngineContext(),
             metaClient,
-            metaClient.reloadActiveTimeline(),
-            getHoodieWriteConfig(metaClient).getMetadataConfig());
+            getHoodieWriteConfig(metaClient).getMetadataConfig(),
+            metaClient.reloadActiveTimeline());
     return getAllLatestBaseFiles(fsView).stream()
         .map(HoodieBaseFile::getPath)
         .collect(Collectors.toList());
@@ -335,8 +336,8 @@ public abstract class TestAbstractHudiTable
     List<HoodieInstant> commitInstants =
         metaClient.getActiveTimeline().reload().getCommitsTimeline().getInstants();
     HoodieInstant instantToRestore = commitInstants.get(commitInstants.size() - 1 - n);
-    getWriteClient().savepoint(instantToRestore.getTimestamp(), "user", "savepoint-test");
-    getWriteClient().restoreToSavepoint(instantToRestore.getTimestamp());
+    getWriteClient().savepoint(instantToRestore.requestedTime(), "user", "savepoint-test");
+    getWriteClient().restoreToSavepoint(instantToRestore.requestedTime());
     assertMergeOnReadRestoreContainsLogFiles();
   }
 
@@ -353,11 +354,9 @@ public abstract class TestAbstractHudiTable
     if (metaClient.getTableConfig().getTableType() == HoodieTableType.MERGE_ON_READ) {
       HoodieActiveTimeline activeTimeline = metaClient.getActiveTimeline().reload();
       HoodieInstant restoreInstant = activeTimeline.getRestoreTimeline().firstInstant().get();
-      Option<byte[]> instantDetails = activeTimeline.getInstantDetails(restoreInstant);
       try {
         HoodieRestoreMetadata instantMetadata =
-            TimelineMetadataUtils.deserializeAvroMetadata(
-                instantDetails.get(), HoodieRestoreMetadata.class);
+            activeTimeline.readRestoreMetadata(restoreInstant);
         assertTrue(
             instantMetadata.getHoodieRestoreMetadata().values().stream()
                 .flatMap(
@@ -590,31 +589,30 @@ public abstract class TestAbstractHudiTable
   @SneakyThrows
   protected HoodieTableMetaClient getMetaClient(
       TypedProperties keyGenProperties, HoodieTableType hoodieTableType, Configuration conf) {
-    LocalFileSystem fs = (LocalFileSystem) FSUtils.getFs(basePath, conf);
+    HadoopStorageConfiguration storageConf = new HadoopStorageConfiguration(conf);
+    LocalFileSystem fs = (LocalFileSystem) FileSystem.get(new org.apache.hadoop.fs.Path(basePath).toUri(), conf);
     // Enforce checksum such that fs.open() is consistent to DFS
     fs.setVerifyChecksum(true);
     fs.mkdirs(new org.apache.hadoop.fs.Path(basePath));
 
     if (fs.exists(new org.apache.hadoop.fs.Path(basePath + "/.hoodie"))) {
       return HoodieTableMetaClient.builder()
-          .setConf(conf)
+          .setConf(storageConf)
           .setBasePath(basePath)
           .setLoadActiveTimelineOnLoad(true)
           .build();
     }
-    Properties properties =
-        HoodieTableMetaClient.withPropertyBuilder()
-            .fromProperties(keyGenProperties)
-            .setTableName(tableName)
-            .setTableType(hoodieTableType)
-            .setKeyGeneratorClassProp(keyGenerator.getClass().getCanonicalName())
-            .setPartitionFields(String.join(",", partitionFieldNames))
-            .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
-            .setPayloadClass(OverwriteWithLatestAvroPayload.class)
-            .setCommitTimezone(HoodieTimelineTimeZone.UTC)
-            .setBaseFileFormat(HoodieFileFormat.PARQUET.toString())
-            .build();
-    return HoodieTableMetaClient.initTableAndGetMetaClient(conf, this.basePath, properties);
+    return HoodieTableMetaClient.newTableBuilder()
+        .fromProperties(keyGenProperties)
+        .setTableName(tableName)
+        .setTableType(hoodieTableType)
+        .setKeyGeneratorClassProp(keyGenerator.getClass().getCanonicalName())
+        .setPartitionFields(String.join(",", partitionFieldNames))
+        .setRecordKeyFields(RECORD_KEY_FIELD_NAME)
+        .setPayloadClass(OverwriteWithLatestAvroPayload.class)
+        .setCommitTimezone(HoodieTimelineTimeZone.UTC)
+        .setBaseFileFormat(HoodieFileFormat.PARQUET.toString())
+        .initTable(storageConf, this.basePath);
   }
 
   private static Schema.Field copyField(Schema.Field input) {

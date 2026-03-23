@@ -234,25 +234,30 @@ public class BaseFileUpdatesExtractor {
     return writeStatus;
   }
 
+  @SuppressWarnings("unchecked")
   private Map<String, HoodieColumnRangeMetadata<Comparable>> convertColStats(
       String fileName, List<ColumnStat> columnStatMap) {
-    return columnStatMap.stream()
+    Map<String, HoodieColumnRangeMetadata<Comparable>> result = new HashMap<>();
+    columnStatMap.stream()
         .filter(
             entry ->
                 !InternalType.NON_SCALAR_TYPES.contains(entry.getField().getSchema().getDataType()))
-        .map(
-            columnStat ->
-                HoodieColumnRangeMetadata.<Comparable>create(
-                    fileName,
-                    convertFromXTablePath(columnStat.getField().getPath()),
-                    (Comparable) columnStat.getRange().getMinValue(),
-                    (Comparable) columnStat.getRange().getMaxValue(),
-                    columnStat.getNumNulls(),
-                    columnStat.getNumValues(),
-                    columnStat.getTotalSize(),
-                    -1L,
-                    ValueMetadata.NULL_METADATA))
-        .collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
+        .forEach(
+            columnStat -> {
+              HoodieColumnRangeMetadata<Comparable> metadata =
+                  HoodieColumnRangeMetadata.<Comparable>create(
+                      fileName,
+                      convertFromXTablePath(columnStat.getField().getPath()),
+                      (Comparable) columnStat.getRange().getMinValue(),
+                      (Comparable) columnStat.getRange().getMaxValue(),
+                      columnStat.getNumNulls(),
+                      columnStat.getNumValues(),
+                      columnStat.getTotalSize(),
+                      -1L,
+                      ValueMetadata.NULL_METADATA);
+              result.put(metadata.getColumnName(), metadata);
+            });
+    return result;
   }
 
   /** Holds the information needed to create a "replace" commit in the Hudi table. */

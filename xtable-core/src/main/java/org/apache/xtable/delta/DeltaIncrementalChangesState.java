@@ -31,7 +31,7 @@ import org.apache.spark.sql.delta.actions.Action;
 
 import scala.Tuple2;
 import scala.collection.JavaConverters;
-import scala.collection.Seq;
+import scala.collection.immutable.Seq;
 
 import com.google.common.base.Preconditions;
 

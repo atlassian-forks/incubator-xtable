@@ -43,6 +43,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.clustering.plan.strategy.JavaSizeBasedClusteringPlanStrategy;
 import org.apache.hudi.client.clustering.run.strategy.JavaSortAndSizeExecutionStrategy;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.common.config.TypedProperties;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.model.HoodieAvroPayload;
@@ -320,7 +321,7 @@ public class TestJavaHudiTable extends TestAbstractHudiTable {
               .withArchivalConfig(archivalConfig)
               .build();
     }
-    HoodieEngineContext context = new HoodieJavaEngineContext(conf);
+    HoodieEngineContext context = new HoodieJavaEngineContext(new HadoopStorageConfiguration(conf));
     return new HoodieJavaWriteClient<>(context, writeConfig);
   }
 }

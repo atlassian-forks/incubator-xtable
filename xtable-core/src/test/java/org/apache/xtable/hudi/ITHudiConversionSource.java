@@ -59,6 +59,7 @@ import org.apache.hudi.common.model.HoodieAvroPayload;
 import org.apache.hudi.common.model.HoodieRecord;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 
 import org.apache.xtable.GenericTable;
@@ -650,13 +651,13 @@ public class ITHudiConversionSource {
           hudiClient.getCommitsBacklog(instantsForIncrementalSync);
       for (HoodieInstant instant : instantCommitsBacklog.getCommitsToProcess()) {
         TableChange tableChange = hudiClient.getTableChangeForCommit(instant);
-        if (commitInstant2.equals(instant.getTimestamp())) {
+        if (commitInstant2.equals(instant.requestedTime())) {
           ValidationTestHelper.validateTableChange(
               baseFilesAfterCommit1, baseFilesAfterCommit2, tableChange);
         } else if ("rollback".equals(instant.getAction())) {
           ValidationTestHelper.validateTableChange(
               baseFilesAfterCommit3, baseFilesAfterRollback, tableChange);
-        } else if (commitInstant4.equals(instant.getTimestamp())) {
+        } else if (commitInstant4.equals(instant.requestedTime())) {
           ValidationTestHelper.validateTableChange(
               baseFilesAfterRollback, baseFilesAfterCommit4, tableChange);
         } else {
@@ -689,7 +690,7 @@ public class ITHudiConversionSource {
       Configuration conf, String basePath, String xTablePartitionConfig) {
     HoodieTableMetaClient hoodieTableMetaClient =
         HoodieTableMetaClient.builder()
-            .setConf(conf)
+            .setConf(new HadoopStorageConfiguration(conf))
             .setBasePath(basePath)
             .setLoadActiveTimelineOnLoad(true)
             .build();

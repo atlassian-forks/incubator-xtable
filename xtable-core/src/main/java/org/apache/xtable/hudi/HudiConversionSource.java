@@ -36,7 +36,6 @@ import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieActiveTimeline;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.util.Option;
 
 import com.google.common.collect.Iterators;
@@ -102,7 +101,7 @@ public class HudiConversionSource implements ConversionSource<HoodieInstant> {
     List<HoodieInstant> pendingInstants =
         activeTimeline
             .filterInflightsAndRequested()
-            .findInstantsBefore(latestCommit.getTimestamp())
+            .findInstantsBefore(latestCommit.requestedTime())
             .getInstants();
     InternalTable table = getTable(latestCommit);
     return InternalSnapshot.builder()
@@ -112,7 +111,7 @@ public class HudiConversionSource implements ConversionSource<HoodieInstant> {
             pendingInstants.stream()
                 .map(
                     hoodieInstant ->
-                        HudiInstantUtils.parseFromInstantTime(hoodieInstant.getTimestamp()))
+                        HudiInstantUtils.parseFromInstantTime(hoodieInstant.requestedTime()))
                 .collect(CustomCollectors.toList(pendingInstants.size())))
         .sourceIdentifier(getCommitIdentifier(latestCommit))
         .build();
@@ -124,7 +123,7 @@ public class HudiConversionSource implements ConversionSource<HoodieInstant> {
     HoodieTimeline visibleTimeline =
         activeTimeline
             .filterCompletedInstants()
-            .findInstantsBeforeOrEquals(hoodieInstantForDiff.getTimestamp());
+            .findInstantsBeforeOrEquals(hoodieInstantForDiff.requestedTime());
     InternalTable table = getTable(hoodieInstantForDiff);
     return TableChange.builder()
         .tableAsOfChange(table)
@@ -165,7 +164,7 @@ public class HudiConversionSource implements ConversionSource<HoodieInstant> {
 
   @Override
   public String getCommitIdentifier(HoodieInstant commit) {
-    return commit.getTimestamp();
+    return commit.requestedTime();
   }
 
   private boolean doesCommitExistsAsOfInstant(Instant instant) {
@@ -181,8 +180,7 @@ public class HudiConversionSource implements ConversionSource<HoodieInstant> {
       return false;
     }
     HoodieCleanMetadata cleanMetadata =
-        TimelineMetadataUtils.deserializeHoodieCleanMetadata(
-            metaClient.getActiveTimeline().getInstantDetails(lastCleanInstant.get()).get());
+        metaClient.getActiveTimeline().readCleanMetadata(lastCleanInstant.get());
     String earliestCommitToRetain = cleanMetadata.getEarliestCommitToRetain();
     Instant earliestCommitToRetainInstant =
         HudiInstantUtils.parseFromInstantTime(earliestCommitToRetain);
@@ -200,7 +198,7 @@ public class HudiConversionSource implements ConversionSource<HoodieInstant> {
             .filter(hoodieInstant -> hoodieInstant.isInflight() || hoodieInstant.isRequested())
             .map(
                 hoodieInstant ->
-                    HudiInstantUtils.parseFromInstantTime(hoodieInstant.getTimestamp()))
+                    HudiInstantUtils.parseFromInstantTime(hoodieInstant.requestedTime()))
             .collect(Collectors.toList());
     return CommitsPair.builder()
         .completedCommits(lastPendingHoodieInstantsCompleted)
@@ -216,7 +214,7 @@ public class HudiConversionSource implements ConversionSource<HoodieInstant> {
     List<HoodieInstant> allInstants =
         metaClient
             .getActiveTimeline()
-            .findInstantsAfter(commitInstant.getTimestamp())
+            .findInstantsAfter(commitInstant.requestedTime())
             .getInstants();
     // collect the completed instants & inflight instants from all the instants.
     List<HoodieInstant> completedInstants =
@@ -235,7 +233,7 @@ public class HudiConversionSource implements ConversionSource<HoodieInstant> {
                         <= 0)
             .map(
                 hoodieInstant ->
-                    HudiInstantUtils.parseFromInstantTime(hoodieInstant.getTimestamp()))
+                    HudiInstantUtils.parseFromInstantTime(hoodieInstant.requestedTime()))
             .collect(Collectors.toList());
     return CommitsPair.builder()
         .completedCommits(completedInstants)
@@ -262,7 +260,7 @@ public class HudiConversionSource implements ConversionSource<HoodieInstant> {
             .collect(
                 Collectors.toMap(
                     hoodieInstant ->
-                        HudiInstantUtils.parseFromInstantTime(hoodieInstant.getTimestamp()),
+                        HudiInstantUtils.parseFromInstantTime(hoodieInstant.requestedTime()),
                     hoodieInstant -> hoodieInstant));
     return instants.stream()
         .map(instantHoodieInstantMap::get)

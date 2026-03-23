@@ -48,6 +48,7 @@ import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.client.timeline.HoodieTimelineArchiver;
 import org.apache.hudi.client.timeline.TimelineArchivers;
 import org.apache.hudi.client.common.HoodieJavaEngineContext;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.common.HoodieCleanStat;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
@@ -117,7 +118,8 @@ public class HudiConversionTarget implements ConversionTarget {
         (int) targetTable.getMetadataRetention().toHours(),
         maxNumDeltaCommitsBeforeCompaction,
         BaseFileUpdatesExtractor.of(
-            new HoodieJavaEngineContext(configuration), new CachingPath(targetTable.getBasePath())),
+            new HoodieJavaEngineContext(new HadoopStorageConfiguration(configuration)),
+            new CachingPath(targetTable.getBasePath())),
         AvroSchemaConverter.getInstance(),
         HudiTableManager.of(configuration),
         CommitState::new);
@@ -169,7 +171,8 @@ public class HudiConversionTarget implements ConversionTarget {
         (int) targetTable.getMetadataRetention().toHours(),
         HoodieMetadataConfig.COMPACT_NUM_DELTA_COMMITS.defaultValue(),
         BaseFileUpdatesExtractor.of(
-            new HoodieJavaEngineContext(configuration), new CachingPath(targetTable.getBasePath())),
+            new HoodieJavaEngineContext(new HadoopStorageConfiguration(configuration)),
+            new CachingPath(targetTable.getBasePath())),
         AvroSchemaConverter.getInstance(),
         HudiTableManager.of(configuration),
         CommitState::new);
@@ -318,7 +321,7 @@ public class HudiConversionTarget implements ConversionTarget {
 
         TableSyncMetadata metadata = optionalMetadata.get();
         if (sourceIdentifier.equals(metadata.getSourceIdentifier())) {
-          return Optional.of(instant.getTimestamp());
+          return Optional.of(instant.requestedTime());
         }
       } catch (Exception e) {
         log.warn("Failed to parse commit metadata for instant: {}", instant, e);
@@ -394,18 +397,20 @@ public class HudiConversionTarget implements ConversionTarget {
               getNumInstantsToRetain(),
               maxNumDeltaCommitsBeforeCompaction,
               timelineRetentionInHours);
-      HoodieEngineContext engineContext = new HoodieJavaEngineContext(metaClient.getHadoopConf());
+      HoodieEngineContext engineContext = new HoodieJavaEngineContext(metaClient.getStorageConf());
       try (HoodieJavaWriteClient<?> writeClient =
           new HoodieJavaWriteClient<>(engineContext, writeConfig)) {
-        writeClient.startCommitWithTime(instantTime, HoodieTimeline.REPLACE_COMMIT_ACTION);
-        metaClient
-            .getActiveTimeline()
-            .transitionReplaceRequestedToInflight(
-                new HoodieInstant(
+        HoodieInstant requestedReplaceInstant =
+            metaClient
+                .getInstantGenerator()
+                .createNewInstant(
                     HoodieInstant.State.REQUESTED,
                     HoodieTimeline.REPLACE_COMMIT_ACTION,
-                    instantTime),
-                Option.empty());
+                    instantTime);
+        metaClient.getActiveTimeline().createNewInstant(requestedReplaceInstant);
+        metaClient
+            .getActiveTimeline()
+            .transitionReplaceRequestedToInflight(requestedReplaceInstant, Option.empty());
         writeClient.commit(
             instantTime,
             writeStatuses,
@@ -510,7 +515,7 @@ public class HudiConversionTarget implements ConversionTarget {
                     .map(
                         earliestInstantToRetain ->
                             new HoodieActionInstant(
-                                earliestInstantToRetain.getTimestamp(),
+                                earliestInstantToRetain.requestedTime(),
                                 earliestInstantToRetain.getAction(),
                                 earliestInstantToRetain.getState().name()))
                     .orElse(null),
@@ -519,11 +524,11 @@ public class HudiConversionTarget implements ConversionTarget {
                 Collections.emptyMap(),
                 CleanPlanner.LATEST_CLEAN_PLAN_VERSION,
                 cleanInfoPerPartition,
-                Collections.emptyList());
+                Collections.emptyList(),
+                Collections.emptyMap());
         // create a clean instant and mark it as requested with the clean plan
         HoodieInstant requestedCleanInstant =
-            new HoodieInstant(
-                HoodieInstant.State.REQUESTED, HoodieTimeline.CLEAN_ACTION, cleanTime);
+            metaClient.getInstantGenerator().getCleanRequestedInstant(cleanTime);
         activeTimeline.saveToCleanRequested(requestedCleanInstant, Option.of(cleanerPlan));
         HoodieInstant inflightClean =
             activeTimeline.transitionCleanRequestedToInflight(requestedCleanInstant);
@@ -542,7 +547,7 @@ public class HudiConversionTarget implements ConversionTarget {
                           deletePaths,
                           deletePaths,
                           Collections.emptyList(),
-                          earliestInstant.get().getTimestamp(),
+                          earliestInstant.get().requestedTime(),
                           instantTime);
                     })
                 .collect(Collectors.toList());

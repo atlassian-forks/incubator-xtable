@@ -71,7 +71,8 @@ import org.apache.hudi.common.util.Option;
 import org.apache.hudi.common.util.collection.Pair;
 import org.apache.hudi.config.HoodieWriteConfig;
 import org.apache.hudi.metadata.HoodieBackedTableMetadata;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 
 import org.apache.xtable.conversion.TargetTable;
 import org.apache.xtable.model.InternalTable;
@@ -99,7 +100,8 @@ import org.apache.xtable.spi.sync.ConversionTarget;
 public class ITHudiConversionTarget {
   @TempDir public static Path tempDir;
   private static final Configuration CONFIGURATION = new Configuration();
-  private static final HoodieEngineContext CONTEXT = new HoodieJavaEngineContext(CONFIGURATION);
+  private static final HoodieEngineContext CONTEXT =
+      new HoodieJavaEngineContext(new HadoopStorageConfiguration(CONFIGURATION));
 
   private static final String TABLE_NAME = "test_table";
   private static final String KEY_FIELD_NAME = "id";
@@ -169,7 +171,7 @@ public class ITHudiConversionTarget {
       setupMetaClient
           .getActiveTimeline()
           .transitionReplaceRequestedToInflight(
-              new HoodieInstant(
+              setupMetaClient.createNewInstant(
                   HoodieInstant.State.REQUESTED,
                   HoodieTimeline.REPLACE_COMMIT_ACTION,
                   initialInstant),
@@ -213,12 +215,19 @@ public class ITHudiConversionTarget {
     targetClient.completeSync();
 
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(CONFIGURATION).setBasePath(tableBasePath).build();
+        HoodieTableMetaClient.builder()
+            .setConf(new HadoopStorageConfiguration(CONFIGURATION))
+            .setBasePath(tableBasePath)
+            .build();
     assertFileGroupCorrectness(
         metaClient, partitionPath, Collections.singletonList(Pair.of(fileName, filePath)));
     try (HoodieBackedTableMetadata hoodieBackedTableMetadata =
         new HoodieBackedTableMetadata(
-            CONTEXT, writeConfig.getMetadataConfig(), tableBasePath, true)) {
+            CONTEXT,
+            metaClient.getStorage(),
+            getHoodieWriteConfig(metaClient).getMetadataConfig(),
+            tableBasePath,
+            true)) {
       assertColStats(hoodieBackedTableMetadata, partitionPath, fileName);
     }
     // include meta fields since the table was created with meta fields enabled
@@ -254,12 +263,19 @@ public class ITHudiConversionTarget {
     targetClient.completeSync();
 
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(CONFIGURATION).setBasePath(tableBasePath).build();
+        HoodieTableMetaClient.builder()
+            .setConf(new HadoopStorageConfiguration(CONFIGURATION))
+            .setBasePath(tableBasePath)
+            .build();
     assertFileGroupCorrectness(
         metaClient, partitionPath, Collections.singletonList(Pair.of(fileName, filePath)));
     try (HoodieBackedTableMetadata hoodieBackedTableMetadata =
         new HoodieBackedTableMetadata(
-            CONTEXT, getHoodieWriteConfig(metaClient).getMetadataConfig(), tableBasePath, true)) {
+            CONTEXT,
+            metaClient.getStorage(),
+            getHoodieWriteConfig(metaClient).getMetadataConfig(),
+            tableBasePath,
+            true)) {
       assertColStats(hoodieBackedTableMetadata, partitionPath, fileName);
     }
     assertSchema(metaClient, false);
@@ -300,13 +316,20 @@ public class ITHudiConversionTarget {
     targetClient.completeSync();
 
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(CONFIGURATION).setBasePath(tableBasePath).build();
+        HoodieTableMetaClient.builder()
+            .setConf(new HadoopStorageConfiguration(CONFIGURATION))
+            .setBasePath(tableBasePath)
+            .build();
     Pair<String, String> file0Pair = Pair.of(fileName0, filePath0);
     assertFileGroupCorrectness(
         metaClient, partitionPath, Arrays.asList(file0Pair, Pair.of(fileName1, filePath1)));
     try (HoodieBackedTableMetadata hoodieBackedTableMetadata =
         new HoodieBackedTableMetadata(
-            CONTEXT, getHoodieWriteConfig(metaClient).getMetadataConfig(), tableBasePath, true)) {
+            CONTEXT,
+            metaClient.getStorage(),
+            getHoodieWriteConfig(metaClient).getMetadataConfig(),
+            tableBasePath,
+            true)) {
       assertColStats(hoodieBackedTableMetadata, partitionPath, fileName1);
     }
 
@@ -324,7 +347,11 @@ public class ITHudiConversionTarget {
         metaClient, partitionPath, Arrays.asList(file0Pair, Pair.of(fileName2, filePath2)));
     try (HoodieBackedTableMetadata hoodieBackedTableMetadata =
         new HoodieBackedTableMetadata(
-            CONTEXT, getHoodieWriteConfig(metaClient).getMetadataConfig(), tableBasePath, true)) {
+            CONTEXT,
+            metaClient.getStorage(),
+            getHoodieWriteConfig(metaClient).getMetadataConfig(),
+            tableBasePath,
+            true)) {
       // the metadata for fileName1 should still be present until the cleaner kicks in
       assertColStats(hoodieBackedTableMetadata, partitionPath, fileName1);
       // new file stats should be present
@@ -340,7 +367,7 @@ public class ITHudiConversionTarget {
         Collections.singletonList(getTestFile(partitionPath, fileName2)),
         Instant.now().minus(8, ChronoUnit.HOURS),
         "2");
-    System.out.println(metaClient.getCommitsTimeline().lastInstant().get().getTimestamp());
+    System.out.println(metaClient.getCommitsTimeline().lastInstant().get().requestedTime());
 
     // create a commit that just adds fileName4
     String fileName4 = "file_4.parquet";
@@ -351,7 +378,7 @@ public class ITHudiConversionTarget {
         Collections.emptyList(),
         Instant.now(),
         "3");
-    System.out.println(metaClient.getCommitsTimeline().lastInstant().get().getTimestamp());
+    System.out.println(metaClient.getCommitsTimeline().lastInstant().get().requestedTime());
 
     // create another commit that should trigger archival of the first two commits
     String fileName5 = "file_5.parquet";
@@ -362,7 +389,7 @@ public class ITHudiConversionTarget {
         Collections.emptyList(),
         Instant.now(),
         "4");
-    System.out.println(metaClient.getCommitsTimeline().lastInstant().get().getTimestamp());
+    System.out.println(metaClient.getCommitsTimeline().lastInstant().get().requestedTime());
 
     assertFileGroupCorrectness(
         metaClient,
@@ -375,7 +402,11 @@ public class ITHudiConversionTarget {
     // col stats should be cleaned up for fileName1 but present for fileName2 and fileName3
     try (HoodieBackedTableMetadata hoodieBackedTableMetadata =
         new HoodieBackedTableMetadata(
-            CONTEXT, getHoodieWriteConfig(metaClient).getMetadataConfig(), tableBasePath, true)) {
+            CONTEXT,
+            metaClient.getStorage(),
+            getHoodieWriteConfig(metaClient).getMetadataConfig(),
+            tableBasePath,
+            true)) {
       // assertEmptyColStats(hoodieBackedTableMetadata, partitionPath, fileName1);
       assertColStats(hoodieBackedTableMetadata, partitionPath, fileName3);
       assertColStats(hoodieBackedTableMetadata, partitionPath, fileName4);
@@ -421,14 +452,17 @@ public class ITHudiConversionTarget {
 
     // Step 3: Verify Source-Target Mapping for Initial Snapshot
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(CONFIGURATION).setBasePath(tableBasePath).build();
+        HoodieTableMetaClient.builder()
+            .setConf(new HadoopStorageConfiguration(CONFIGURATION))
+            .setBasePath(tableBasePath)
+            .build();
 
     Optional<String> initialTargetIdentifier =
         targetClient.getTargetCommitIdentifier(latestState.getSourceIdentifier(), metaClient);
     assertTrue(initialTargetIdentifier.isPresent());
     assertEquals(
         initialTargetIdentifier.get(),
-        metaClient.getCommitsTimeline().lastInstant().get().getTimestamp());
+        metaClient.getCommitsTimeline().lastInstant().get().requestedTime());
 
     // Step 4: Perform Incremental Sync (Remove file1, Add file2)
     String fileName2 = "file_2.parquet";
@@ -446,7 +480,7 @@ public class ITHudiConversionTarget {
     assertTrue(incrementalTargetIdentifier.isPresent());
     assertEquals(
         incrementalTargetIdentifier.get(),
-        metaClient.getCommitsTimeline().lastInstant().get().getTimestamp());
+        metaClient.getCommitsTimeline().lastInstant().get().requestedTime());
 
     // Step 6: Perform Another Incremental Sync (Remove file2, Add file3)
     String fileName3 = "file_3.parquet";
@@ -464,7 +498,7 @@ public class ITHudiConversionTarget {
     assertTrue(incrementalTargetIdentifier2.isPresent());
     assertEquals(
         incrementalTargetIdentifier2.get(),
-        metaClient.getCommitsTimeline().lastInstant().get().getTimestamp());
+        metaClient.getCommitsTimeline().lastInstant().get().requestedTime());
 
     // Step 8: Verify Non-Existent Source ID Returns Empty
     Optional<String> nonExistentTargetIdentifier =
@@ -505,7 +539,10 @@ public class ITHudiConversionTarget {
     targetClient.completeSync();
 
     HoodieTableMetaClient metaClient =
-        HoodieTableMetaClient.builder().setConf(CONFIGURATION).setBasePath(tableBasePath).build();
+        HoodieTableMetaClient.builder()
+            .setConf(new HadoopStorageConfiguration(CONFIGURATION))
+            .setBasePath(tableBasePath)
+            .build();
     // No crash should happen during the process
     Optional<String> targetIdentifier = targetClient.getTargetCommitIdentifier("0", metaClient);
     // The targetIdentifier is expected to not be found
@@ -578,11 +615,11 @@ public class ITHudiConversionTarget {
       String partitionPath,
       List<Pair<String, String>> fileIdAndPath) {
     HoodieTableFileSystemView fsView =
-        new HoodieMetadataFileSystemView(
+        FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(
             CONTEXT,
             metaClient,
-            metaClient.reloadActiveTimeline(),
-            getHoodieWriteConfig(metaClient).getMetadataConfig());
+            getHoodieWriteConfig(metaClient).getMetadataConfig(),
+            metaClient.reloadActiveTimeline());
     List<HoodieFileGroup> fileGroups =
         fsView
             .getAllFileGroups(partitionPath)
@@ -597,7 +634,7 @@ public class ITHudiConversionTarget {
       assertEquals(partitionPath, fileGroup.getPartitionPath());
       HoodieBaseFile baseFile = fileGroup.getAllBaseFiles().findFirst().get();
       assertEquals(
-          metaClient.getBasePathV2().toString() + "/" + expectedFilePath, baseFile.getPath());
+          metaClient.getBasePath().toString() + "/" + expectedFilePath, baseFile.getPath());
     }
     fsView.close();
   }

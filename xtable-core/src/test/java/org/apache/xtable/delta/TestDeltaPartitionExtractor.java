@@ -514,12 +514,15 @@ public class TestDeltaPartitionExtractor {
     Map<String, StructField> actual =
         deltaPartitionExtractor.convertToDeltaPartitionFormat(
             Collections.singletonList(internalPartitionField));
-    Metadata expectedPartitionFieldMetadata =
-        new Metadata(
-            ScalaUtils.convertJavaMapToScala(
-                Collections.singletonMap(
-                    DELTA_GENERATION_EXPRESSION,
-                    "MOD((HASH(partition_column1) & 2147483647), 5)")));
+    @SuppressWarnings("unchecked")
+    scala.collection.immutable.Map<String, Object> metadataMap =
+        (scala.collection.immutable.Map<String, Object>)
+            (scala.collection.immutable.Map<?, ?>)
+                ScalaUtils.convertJavaMapToScala(
+                    Collections.singletonMap(
+                        DELTA_GENERATION_EXPRESSION,
+                        "MOD((HASH(partition_column1) & 2147483647), 5)"));
+    Metadata expectedPartitionFieldMetadata = new Metadata(metadataMap);
     Map<String, StructField> expected =
         Collections.singletonMap(
             "xtable_partition_col_BUCKET_partition_column1",

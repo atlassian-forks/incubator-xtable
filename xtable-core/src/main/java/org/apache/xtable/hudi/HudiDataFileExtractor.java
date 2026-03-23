@@ -50,12 +50,12 @@ import org.apache.hudi.common.model.HoodieWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
-import org.apache.hudi.common.table.timeline.TimelineMetadataUtils;
 import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.FileSystemViewStorageConfig;
 import org.apache.hudi.common.table.view.FileSystemViewStorageType;
 import org.apache.hudi.common.table.view.SyncableFileSystemView;
 import org.apache.hudi.common.table.view.TableFileSystemView;
+import org.apache.hudi.metadata.HoodieBackedTableMetadata;
 import org.apache.hudi.metadata.HoodieTableMetadata;
 
 import org.apache.xtable.collectors.CustomCollectors;
@@ -85,15 +85,16 @@ public class HudiDataFileExtractor implements AutoCloseable {
       HoodieTableMetaClient metaClient,
       HudiPartitionValuesExtractor hudiPartitionValuesExtractor,
       HudiFileStatsExtractor hudiFileStatsExtractor) {
-    this.engineContext = new HoodieLocalEngineContext(metaClient.getHadoopConf());
+    this.engineContext = new HoodieLocalEngineContext(metaClient.getStorageConf());
     metadataConfig =
         HoodieMetadataConfig.newBuilder()
             .enable(metaClient.getTableConfig().isMetadataTableAvailable())
             .build();
-    this.basePath = metaClient.getBasePathV2();
+    this.basePath = new Path(metaClient.getBasePath().toString());
     this.tableMetadata =
-        metadataConfig.enabled()
-            ? HoodieTableMetadata.create(engineContext, metadataConfig, basePath.toString(), true)
+        metadataConfig.isEnabled()
+            ? new HoodieBackedTableMetadata(
+                engineContext, metaClient.getStorage(), metadataConfig, basePath.toString())
             : null;
     this.fileSystemViewManager =
         FileSystemViewManager.createViewManager(
@@ -114,7 +115,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
       List<String> allPartitionPaths =
           tableMetadata != null
               ? tableMetadata.getAllPartitionPaths()
-              : FSUtils.getAllPartitionPaths(engineContext, metadataConfig, basePath.toString());
+              : FSUtils.getAllPartitionPaths(engineContext, metaClient, metadataConfig);
       return getInternalDataFilesForPartitions(allPartitionPaths, table);
     } catch (IOException ex) {
       throw new ReadException(
@@ -155,8 +156,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
         case HoodieTimeline.COMMIT_ACTION:
         case HoodieTimeline.DELTA_COMMIT_ACTION:
           HoodieCommitMetadata commitMetadata =
-              HoodieCommitMetadata.fromBytes(
-                  timeline.getInstantDetails(instant).get(), HoodieCommitMetadata.class);
+              timeline.readCommitMetadata(instant);
           commitMetadata
               .getPartitionToWriteStats()
               .forEach(
@@ -178,8 +178,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
           break;
         case HoodieTimeline.REPLACE_COMMIT_ACTION:
           HoodieReplaceCommitMetadata replaceMetadata =
-              HoodieReplaceCommitMetadata.fromBytes(
-                  timeline.getInstantDetails(instant).get(), HoodieReplaceCommitMetadata.class);
+              timeline.readReplaceCommitMetadata(instant);
 
           replaceMetadata
               .getPartitionToReplaceFileIds()
@@ -207,8 +206,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
           break;
         case HoodieTimeline.ROLLBACK_ACTION:
           HoodieRollbackMetadata rollbackMetadata =
-              TimelineMetadataUtils.deserializeAvroMetadata(
-                  timeline.getInstantDetails(instant).get(), HoodieRollbackMetadata.class);
+              timeline.readRollbackMetadata(instant);
           rollbackMetadata
               .getPartitionMetadata()
               .forEach(
@@ -219,8 +217,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
           break;
         case HoodieTimeline.RESTORE_ACTION:
           HoodieRestoreMetadata restoreMetadata =
-              TimelineMetadataUtils.deserializeAvroMetadata(
-                  timeline.getInstantDetails(instant).get(), HoodieRestoreMetadata.class);
+              timeline.readRestoreMetadata(instant);
           restoreMetadata
               .getHoodieRestoreMetadata()
               .forEach(
@@ -299,7 +296,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
                   fileGroup.getAllBaseFiles().collect(Collectors.toList());
               boolean newBaseFileAdded = false;
               for (HoodieBaseFile baseFile : baseFiles) {
-                if (baseFile.getCommitTime().equals(instantToConsider.getTimestamp())) {
+                if (baseFile.getCommitTime().equals(instantToConsider.requestedTime())) {
                   newBaseFileAdded = true;
                   filesToAdd.add(buildFileWithoutStats(partitionValues, baseFile));
                 } else if (newBaseFileAdded) {
@@ -328,7 +325,7 @@ public class HudiDataFileExtractor implements AutoCloseable {
         Stream.concat(
             fsView.getAllFileGroups(partitionPath),
             fsView.getReplacedFileGroupsBeforeOrOn(
-                instantToConsider.getTimestamp(), partitionPath));
+                instantToConsider.requestedTime(), partitionPath));
     fileGroups.forEach(
         fileGroup -> {
           List<HoodieBaseFile> baseFiles = fileGroup.getAllBaseFiles().collect(Collectors.toList());
@@ -402,9 +399,9 @@ public class HudiDataFileExtractor implements AutoCloseable {
         .recordCount(rowCount)
         .columnStats(Collections.emptyList())
         .lastModified(
-            hoodieBaseFile.getFileStatus() == null
+            hoodieBaseFile.getPathInfo() == null
                 ? 0L
-                : hoodieBaseFile.getFileStatus().getModificationTime())
+                : hoodieBaseFile.getPathInfo().getModificationTime())
         .build();
   }
 

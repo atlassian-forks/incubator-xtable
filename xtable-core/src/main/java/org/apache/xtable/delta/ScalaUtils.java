@@ -26,12 +26,16 @@ import scala.Tuple2;
 import scala.collection.JavaConverters;
 
 public class ScalaUtils {
-  public static scala.collection.immutable.Map convertJavaMapToScala(Map<String, String> javaMap) {
+  @SuppressWarnings("unchecked")
+  public static scala.collection.immutable.Map<String, String> convertJavaMapToScala(
+      Map<String, String> javaMap) {
     List<Tuple2<String, String>> tuples =
         javaMap.entrySet().stream()
             .map(e -> Tuple2.apply(e.getKey(), e.getValue()))
             .collect(Collectors.toList());
-    scala.collection.Seq<Tuple2<String, String>> seq = JavaConverters.asScalaBuffer(tuples).toSeq();
-    return scala.collection.immutable.Map$.MODULE$.apply(seq);
+    scala.collection.immutable.Seq<Tuple2<String, String>> seq =
+        JavaConverters.asScalaBuffer(tuples).toList();
+    return (scala.collection.immutable.Map<String, String>)
+        scala.collection.immutable.Map$.MODULE$.apply(seq);
   }
 }

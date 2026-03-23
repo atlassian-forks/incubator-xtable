@@ -38,12 +38,13 @@ import org.apache.spark.serializer.KryoSerializer;
 import org.apache.hudi.client.WriteStatus;
 import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.model.HoodieAvroPayload;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.model.HoodieTableType;
 import org.apache.hudi.common.model.HoodieTimelineTimeZone;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
+import org.apache.hudi.storage.hadoop.HadoopStorageConfiguration;
 import org.apache.hudi.config.HoodieArchivalConfig;
 import org.apache.hudi.config.HoodieIndexConfig;
 import org.apache.hudi.config.HoodieWriteConfig;
@@ -54,13 +55,13 @@ public class HudiTestUtil {
   @SneakyThrows
   static HoodieTableMetaClient initTableAndGetMetaClient(
       String tableBasePath, String partitionFields) {
-    return HoodieTableMetaClient.withPropertyBuilder()
+    return HoodieTableMetaClient.newTableBuilder()
         .setCommitTimezone(HoodieTimelineTimeZone.UTC)
         .setTableType(HoodieTableType.COPY_ON_WRITE)
         .setTableName("test_table")
         .setPayloadClass(HoodieAvroPayload.class)
         .setPartitionFields(partitionFields)
-        .initTable(new Configuration(), tableBasePath);
+        .initTable(new HadoopStorageConfiguration(new Configuration()), tableBasePath);
   }
 
   public static HoodieWriteConfig getHoodieWriteConfig(HoodieTableMetaClient metaClient) {
@@ -73,7 +74,7 @@ public class HudiTestUtil {
     return HoodieWriteConfig.newBuilder()
         .withSchema(schema == null ? "" : schema.toString())
         .withIndexConfig(HoodieIndexConfig.newBuilder().withIndexType(INMEMORY).build())
-        .withPath(metaClient.getBasePathV2().toString())
+        .withPath(metaClient.getBasePath().toString())
         .withEmbeddedTimelineServerEnabled(false)
         .withMetadataConfig(
             HoodieMetadataConfig.newBuilder()

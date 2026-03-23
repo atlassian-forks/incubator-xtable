@@ -394,8 +394,12 @@ public class DeltaPartitionExtractor {
     }
     Map<String, String> generatedExpressionMetadata =
         Collections.singletonMap(DELTA_GENERATION_EXPRESSION, generatedExpression);
-    Metadata partitionFieldMetadata =
-        new Metadata(ScalaUtils.convertJavaMapToScala(generatedExpressionMetadata));
+    @SuppressWarnings("unchecked")
+    scala.collection.immutable.Map<String, Object> metadataMap =
+        (scala.collection.immutable.Map<String, Object>)
+            (scala.collection.immutable.Map<?, ?>)
+                ScalaUtils.convertJavaMapToScala(generatedExpressionMetadata);
+    Metadata partitionFieldMetadata = new Metadata(metadataMap);
     return new StructField(currPartitionColumnName, dataType, true, partitionFieldMetadata);
   }
 

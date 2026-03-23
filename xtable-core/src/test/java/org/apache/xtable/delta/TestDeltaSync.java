@@ -66,7 +66,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.apache.spark.sql.delta.GeneratedColumn;
 
 import scala.collection.JavaConverters;
-import scala.collection.Seq;
+
 
 import io.delta.standalone.DeltaLog;
 import io.delta.standalone.DeltaScan;
@@ -359,11 +359,14 @@ public class TestDeltaSync {
     org.apache.spark.sql.delta.DeltaLog deltaLog =
         org.apache.spark.sql.delta.DeltaLog.forTable(sparkSession, basePath.toString());
     org.apache.spark.sql.delta.Snapshot snapshot = deltaLog.getSnapshotAtInit().snapshot();
-    Seq<org.apache.spark.sql.catalyst.expressions.Expression> expressionSeq =
-        scala.collection.JavaConversions.asScalaBuffer(Collections.singletonList(expression));
-    Seq<org.apache.spark.sql.catalyst.expressions.Expression> translatedExpression =
-        GeneratedColumn.generatePartitionFilters(
-            sparkSession, snapshot, expressionSeq, dataset.logicalPlan());
+    scala.collection.immutable.Seq<org.apache.spark.sql.catalyst.expressions.Expression>
+        expressionSeq =
+            scala.collection.JavaConverters.asScalaBuffer(Collections.singletonList(expression))
+                .toList();
+    scala.collection.immutable.Seq<org.apache.spark.sql.catalyst.expressions.Expression>
+        translatedExpression =
+            GeneratedColumn.generatePartitionFilters(
+                sparkSession, snapshot, expressionSeq, dataset.logicalPlan());
     assertEquals(1, translatedExpression.size());
     assertTrue(
         JavaConverters.seqAsJavaList(translatedExpression)

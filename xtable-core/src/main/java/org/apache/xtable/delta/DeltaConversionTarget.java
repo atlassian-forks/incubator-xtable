@@ -55,7 +55,7 @@ import scala.Option;
 import scala.Some;
 import scala.Tuple2;
 import scala.collection.JavaConverters;
-import scala.collection.Seq;
+import scala.collection.immutable.Seq;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -188,17 +188,21 @@ public class DeltaConversionTarget implements ConversionTarget {
   @Override
   public void syncFilesForSnapshot(List<PartitionFileGroup> partitionedDataFiles) {
     transactionState.setActions(
-        dataFileUpdatesExtractor.applySnapshot(
-            deltaLog, partitionedDataFiles, transactionState.getLatestSchemaInternal()));
+        dataFileUpdatesExtractor
+            .applySnapshot(
+                deltaLog, partitionedDataFiles, transactionState.getLatestSchemaInternal())
+            .toList());
   }
 
   @Override
   public void syncFilesForDiff(InternalFilesDiff internalFilesDiff) {
     transactionState.setActions(
-        dataFileUpdatesExtractor.applyDiff(
-            internalFilesDiff,
-            transactionState.getLatestSchemaInternal(),
-            deltaLog.dataPath().toString()));
+        dataFileUpdatesExtractor
+            .applyDiff(
+                internalFilesDiff,
+                transactionState.getLatestSchemaInternal(),
+                deltaLog.dataPath().toString())
+            .toList());
   }
 
   @Override

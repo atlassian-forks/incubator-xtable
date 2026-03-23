@@ -62,7 +62,7 @@ public class HudiTableExtractor {
     InternalSchema canonicalSchema;
     Schema avroSchema;
     try {
-      avroSchema = tableSchemaResolver.getTableAvroSchema(commit.getTimestamp());
+      avroSchema = tableSchemaResolver.getTableAvroSchema(commit.requestedTime());
       canonicalSchema = schemaExtractor.schema(avroSchema);
     } catch (Exception e) {
       throw new SchemaExtractorException(
@@ -81,12 +81,12 @@ public class HudiTableExtractor {
             : DataLayoutStrategy.FLAT;
     return InternalTable.builder()
         .tableFormat(TableFormat.HUDI)
-        .basePath(metaClient.getBasePathV2().toString())
+        .basePath(metaClient.getBasePath().toString())
         .name(metaClient.getTableConfig().getTableName())
         .layoutStrategy(dataLayoutStrategy)
         .partitioningFields(partitionFields)
         .readSchema(canonicalSchema)
-        .latestCommitTime(HudiInstantUtils.parseFromInstantTime(commit.getTimestamp()))
+        .latestCommitTime(HudiInstantUtils.parseFromInstantTime(commit.requestedTime()))
         .latestMetdataPath(metaClient.getMetaPath().toString())
         .build();
   }
