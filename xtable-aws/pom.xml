@@ -28,6 +28,10 @@
     <artifactId>xtable-aws</artifactId>
     <name>XTable AWS</name>
 
+    <properties>
+        <spotless.license.root>${project.parent.basedir}</spotless.license.root>
+    </properties>
+
     <dependencies>
 
         <dependency>

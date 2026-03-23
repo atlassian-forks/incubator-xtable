@@ -43,13 +43,14 @@ import org.apache.hudi.common.config.HoodieMetadataConfig;
 import org.apache.hudi.common.engine.HoodieEngineContext;
 import org.apache.hudi.common.fs.FSUtils;
 import org.apache.hudi.common.model.HoodieBaseFile;
-import org.apache.hudi.common.model.HoodieColumnRangeMetadata;
 import org.apache.hudi.common.model.HoodieDeltaWriteStat;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
+import org.apache.hudi.common.table.view.FileSystemViewManager;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 import org.apache.hudi.common.util.ExternalFilePathUtil;
-import org.apache.hudi.hadoop.CachingPath;
-import org.apache.hudi.metadata.HoodieMetadataFileSystemView;
+import org.apache.hudi.hadoop.fs.CachingPath;
+import org.apache.hudi.stats.HoodieColumnRangeMetadata;
+import org.apache.hudi.stats.ValueMetadata;
 
 import org.apache.xtable.collectors.CustomCollectors;
 import org.apache.xtable.model.schema.InternalType;
@@ -83,15 +84,13 @@ public class BaseFileUpdatesExtractor {
             .enable(metaClient.getTableConfig().isMetadataTableAvailable())
             .build();
     HoodieTableFileSystemView fsView =
-        new HoodieMetadataFileSystemView(
-            engineContext, metaClient, metaClient.getActiveTimeline(), metadataConfig);
+        FileSystemViewManager.createInMemoryFileSystemViewWithTimeline(
+            engineContext, metaClient, metadataConfig, metaClient.getActiveTimeline());
     boolean isTableInitialized = metaClient.isTimelineNonEmpty();
     // Track the partitions that are not present in the snapshot, so the files for those partitions
     // can be dropped
     Set<String> partitionPathsToDrop =
-        new HashSet<>(
-            FSUtils.getAllPartitionPaths(
-                engineContext, metadataConfig, metaClient.getBasePathV2().toString()));
+        new HashSet<>(FSUtils.getAllPartitionPaths(engineContext, metaClient, metadataConfig));
     ReplaceMetadata replaceMetadata =
         partitionedDataFiles.stream()
             .map(
@@ -251,7 +250,8 @@ public class BaseFileUpdatesExtractor {
                     columnStat.getNumNulls(),
                     columnStat.getNumValues(),
                     columnStat.getTotalSize(),
-                    -1L))
+                    -1L,
+                    ValueMetadata.NULL_METADATA))
         .collect(Collectors.toMap(HoodieColumnRangeMetadata::getColumnName, Function.identity()));
   }
 

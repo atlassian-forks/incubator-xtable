@@ -28,6 +28,10 @@
     <artifactId>xtable-api</artifactId>
     <name>XTable Project API</name>
 
+    <properties>
+        <spotless.license.root>${project.parent.basedir}</spotless.license.root>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>

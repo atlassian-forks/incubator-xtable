@@ -28,6 +28,10 @@
     <artifactId>xtable-hudi-support-utils</artifactId>
     <name>XTable Project Hudi Support Utils</name>
 
+    <properties>
+        <spotless.license.root>${project.parent.parent.basedir}</spotless.license.root>
+    </properties>
+
     <dependencies>
         <!-- Logging API -->
         <dependency>

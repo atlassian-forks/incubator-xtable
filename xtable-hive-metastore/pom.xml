@@ -28,6 +28,10 @@
     <artifactId>xtable-hive-metastore</artifactId>
     <name>XTable HMS</name>
 
+    <properties>
+        <spotless.license.root>${project.parent.basedir}</spotless.license.root>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.xtable</groupId>

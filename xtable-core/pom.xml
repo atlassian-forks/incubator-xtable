@@ -28,6 +28,10 @@
     <artifactId>xtable-core_${scala.binary.version}</artifactId>
     <name>XTable Project Core</name>
 
+    <properties>
+        <spotless.license.root>${project.parent.basedir}</spotless.license.root>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.xtable</groupId>

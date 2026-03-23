@@ -29,6 +29,10 @@
     <name>XTable Project Hudi Support Parent POM</name>
     <packaging>pom</packaging>
 
+    <properties>
+        <spotless.license.root>${project.parent.basedir}</spotless.license.root>
+    </properties>
+
     <modules>
         <module>xtable-hudi-support-utils</module>
         <module>xtable-hudi-support-extensions</module>

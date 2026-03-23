@@ -59,15 +59,17 @@
         <project.version>0.2.0-SNAPSHOT</project.version>
         <!-- To ensure build content is re-producible -->
         <project.build.outputTimestamp>2025-05-10T05:47:43Z</project.build.outputTimestamp>
-        <maven.compiler.target>8</maven.compiler.target>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <maven.compiler.release>17</maven.compiler.release>
         <avro.version>1.11.4</avro.version>
         <log4j.version>2.22.0</log4j.version>
         <junit.version>5.11.4</junit.version>
         <junit.platform.runner.version>1.11.4</junit.platform.runner.version>
         <lombok.version>1.18.36</lombok.version>
         <lombok-maven-plugin.version>1.18.20.0</lombok-maven-plugin.version>
-        <hadoop.version>3.4.1</hadoop.version>
-        <hudi.version>0.14.0</hudi.version>
+        <hadoop.version>3.3.4</hadoop.version>
+        <hudi.version>1.1.1</hudi.version>
         <aws.version>2.29.40</aws.version>
         <hive.version>2.3.9</hive.version>
         <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
@@ -80,14 +82,16 @@
         <protobuf.version>3.25.5</protobuf.version>
         <scala12.version>2.12.20</scala12.version>
         <scala13.version>2.13.15</scala13.version>
-        <scala.version>${scala12.version}</scala.version>
-        <scala.binary.version>2.12</scala.binary.version>
-        <spark.version>3.4.2</spark.version>
-        <spark.version.prefix>3.4</spark.version.prefix>
+        <scala.version>${scala13.version}</scala.version>
+        <scala.binary.version>2.13</scala.binary.version>
+        <spark.version>3.5.0</spark.version>
+        <spark.version.prefix>3.5</spark.version.prefix>
         <iceberg.version>1.4.2</iceberg.version>
         <delta.version>2.4.0</delta.version>
         <jackson.version>2.18.2</jackson.version>
         <spotless.version>2.43.0</spotless.version>
+        <!-- Repo root; submodules override so Spotless finds style/ when built with -pl -->
+        <spotless.license.root>${project.basedir}</spotless.license.root>
         <apache.rat.version>0.16.1</apache.rat.version>
         <google.java.format.version>1.8</google.java.format.version>
         <delta.standalone.version>3.3.0</delta.standalone.version>
@@ -100,10 +104,10 @@
         <scala-collection-compat.version>2.12.0</scala-collection-compat.version>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
         <quarkus.platform.group-id>io.quarkus.platform</quarkus.platform.group-id>
-        <quarkus.platform.version>3.2.12.Final</quarkus.platform.version> <!-- compatible with Java 11 -->
+        <quarkus.platform.version>3.2.12.Final</quarkus.platform.version> <!-- compatible with Java 17 -->
         <antlr4.version>4.9.3</antlr4.version>
         <jol.core.version>0.16</jol.core.version>
-        
+
         <!-- Test properties -->
         <skipTests>false</skipTests>
         <skipUTs>${skipTests}</skipUTs>
@@ -659,6 +663,13 @@
                 <groupId>org.projectlombok</groupId>
                 <artifactId>lombok-maven-plugin</artifactId>
                 <version>${lombok-maven-plugin.version}</version>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.projectlombok</groupId>
+                        <artifactId>lombok</artifactId>
+                        <version>${lombok.version}</version>
+                    </dependency>
+                </dependencies>
                 <configuration>
                     <sourceDirectory>${project.basedir}/src/main/java</sourceDirectory>
                     <addOutputDirectory>false</addOutputDirectory>
@@ -678,6 +689,19 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
                 <executions>
+                    <execution>
+                        <id>enforce-java-17</id>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <requireJavaVersion>
+                                    <version>[17,)</version>
+                                </requireJavaVersion>
+                            </rules>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>enforce-logging</id>
                         <goals>
@@ -699,6 +723,9 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <release>${maven.compiler.release}</release>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -841,7 +868,7 @@
                             <exclude>${target.dir.pattern}</exclude>
                         </excludes>
                         <licenseHeader>
-                            <file>style/license-header</file>
+                            <file>${spotless.license.root}/style/license-header</file>
                         </licenseHeader>
                     </java>
                     <python>
@@ -868,7 +895,7 @@
                             <exclude>website/.docusaurus/**</exclude>
                         </excludes>
                         <licenseHeader>
-                            <file>style/text-license-header</file>
+                            <file>${spotless.license.root}/style/text-license-header</file>
                             <delimiter>(^[a-zA-Z0-9_-]|^#[a-zA-Z0-9_-]|^##.+?$)</delimiter>
                         </licenseHeader>
                     </yaml>
@@ -883,7 +910,7 @@
                             <exclude>website/.docusaurus/**</exclude>
                         </excludes>
                         <licenseHeader>
-                            <file>style/text-license-header</file>
+                            <file>${spotless.license.root}/style/text-license-header</file>
                             <delimiter>(^[a-zA-Z0-9_-]|^#[a-zA-Z0-9_-]|^##.+?$)</delimiter>
                             <skipLinesMatching>^#!.+?$</skipLinesMatching>
                         </licenseHeader>
@@ -900,7 +927,7 @@
                             <exclude>website/.docusaurus/**</exclude>
                         </excludes>
                         <licenseHeader>
-                            <file>style/xml-license-header</file>
+                            <file>${spotless.license.root}/style/xml-license-header</file>
                             <delimiter>^&lt;project|^&lt;configuration|^&lt;Configuration|^&lt;extensions|^&lt;component</delimiter>
                             <skipLinesMatching>^&lt;.*xml.+?$</skipLinesMatching>
                         </licenseHeader>
@@ -919,7 +946,7 @@
                                 <exclude>website/.docusaurus/**</exclude>
                             </excludes>
                             <licenseHeader>
-                                <file>style/text-license-header</file>
+                                <file>${spotless.license.root}/style/text-license-header</file>
                                 <delimiter>(^[a-zA-Z0-9_-]|^#[a-zA-Z0-9_-]|^##.+?$)</delimiter>
                             </licenseHeader>
                         </format>
@@ -955,7 +982,7 @@
         <profile>
             <id>scala-2.12</id>
             <activation>
-                <activeByDefault>true</activeByDefault>
+                <activeByDefault>false</activeByDefault>
             </activation>
             <properties>
                 <scala.version>${scala12.version}</scala.version>
@@ -971,7 +998,7 @@
         <profile>
             <id>scala-2.13</id>
             <activation>
-                <activeByDefault>false</activeByDefault>
+                <activeByDefault>true</activeByDefault>
             </activation>
             <properties>
                 <scala.version>${scala13.version}</scala.version>
@@ -1035,7 +1062,7 @@
                         </executions>
                         <configuration>
                             <doclint>none</doclint>
-                            <source>1.8</source>
+                            <source>${maven.compiler.release}</source>
                             <sourcepath>${delombok.output.dir}</sourcepath>
                         </configuration>
                     </plugin>

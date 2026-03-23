@@ -27,6 +27,10 @@
 
     <artifactId>xtable-service</artifactId>
 
+    <properties>
+        <spotless.license.root>${project.parent.basedir}</spotless.license.root>
+    </properties>
+
     <dependencyManagement>
         <dependencies>
             <dependency>

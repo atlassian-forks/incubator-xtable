@@ -29,6 +29,10 @@
     <artifactId>xtable-hudi-support-extensions_${scala.binary.version}</artifactId>
     <name>XTable Project Hudi Support Extensions</name>
 
+    <properties>
+        <spotless.license.root>${project.parent.parent.basedir}</spotless.license.root>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.xtable</groupId>
