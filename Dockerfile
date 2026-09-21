@@ -18,14 +18,31 @@
 
 FROM eclipse-temurin:17-jdk-jammy as package
 
+# Build provenance. Passed in by the caller via --build-arg so the jar
+# inside the image records the exact source state it was built from. Defaults keep
+# a bare `docker build .` working.
+ARG XTABLE_BUILD_COMMIT=unknown
+ARG XTABLE_BUILD_REF=unknown
+# Extra flags for the packaging build. Empty by default; the tree passes
+# apache-rat:check unmodified.
+ARG MAVEN_EXTRA_ARGS=""
+
 WORKDIR /build
 
 COPY ./ ./
 RUN --mount=type=cache,target=/root/.m2 \
-    MAVEN_OPTS=-Dorg.slf4j.simpleLogger.defaultLogLevel=warn ./mvnw -B -am -pl xtable-utilities package -DskipTests
+    MAVEN_OPTS=-Dorg.slf4j.simpleLogger.defaultLogLevel=warn ./mvnw -B -am -pl xtable-utilities package -DskipTests \
+      -Dxtable.build.commit="${XTABLE_BUILD_COMMIT}" -Dxtable.build.ref="${XTABLE_BUILD_REF}" ${MAVEN_EXTRA_ARGS}
 RUN mv xtable-utilities/target/xtable-utilities_2.12-$(./mvnw help:evaluate -Dexpression=project.version -q -DforceStdout)-bundled.jar target/app.jar
 
 FROM eclipse-temurin:17-jre-jammy AS final
+
+ARG XTABLE_BUILD_COMMIT=unknown
+ARG XTABLE_BUILD_REF=unknown
+LABEL org.opencontainers.image.revision="${XTABLE_BUILD_COMMIT}"
+LABEL org.opencontainers.image.version="${XTABLE_BUILD_REF}"
+ARG XTABLE_BUILD_SOURCE="https://github.com/atlassian-forks/incubator-xtable"
+LABEL org.opencontainers.image.source="${XTABLE_BUILD_SOURCE}"
 
 # Create a non-privileged user that the app will run under.
 # See https://docs.docker.com/go/dockerfile-user-best-practices/

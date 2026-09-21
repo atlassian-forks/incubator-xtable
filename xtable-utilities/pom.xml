@@ -37,6 +37,16 @@
           See .mvn/maven-build-cache-config.xml.
         -->
         <maven.build.cache.enabled>false</maven.build.cache.enabled>
+        <!--
+          Build provenance stamped into the bundled jar manifest. Defaults are
+          "unknown" so a plain local build still succeeds; the image build passes
+          -Dxtable.build.commit=<sha> so the deployed artifact says exactly which
+          source state it came from. RunSync logs these on startup, which turns
+          "stale image deployed" into an obvious diagnosis rather than something
+          that looks like a code regression.
+        -->
+        <xtable.build.commit>unknown</xtable.build.commit>
+        <xtable.build.ref>unknown</xtable.build.ref>
     </properties>
 
     <dependencies>
@@ -321,6 +331,10 @@
                         <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                         <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                             <mainClass>org.apache.xtable.utilities.RunSync</mainClass>
+                            <manifestEntries>
+                                <XTable-Build-Commit>${xtable.build.commit}</XTable-Build-Commit>
+                                <XTable-Build-Ref>${xtable.build.ref}</XTable-Build-Ref>
+                            </manifestEntries>
                         </transformer>
                     </transformers>
                     <artifactSet>
