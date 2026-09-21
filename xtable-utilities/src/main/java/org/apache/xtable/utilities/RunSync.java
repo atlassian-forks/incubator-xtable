@@ -29,6 +29,8 @@ import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.jar.Attributes;
+import java.util.jar.Manifest;
 import java.util.stream.Collectors;
 
 import lombok.Builder;
@@ -238,7 +240,43 @@ public class RunSync {
     return cmd.getOptionValue(configFlag);
   }
 
+  /**
+   * Reads build provenance from the jar manifest. The bundled jar stamps {@code
+   * XTable-Build-Commit} and {@code XTable-Build-Ref} at shade time; a jar built without those
+   * properties reports {@code unknown}. Logging this on startup makes a stale deployed image an
+   * obvious diagnosis instead of something that looks like a code regression.
+   */
+  @VisibleForTesting
+  static String buildProvenance() {
+    String commit = "unknown";
+    String ref = "unknown";
+    String version = "unknown";
+    try (InputStream manifestStream =
+        RunSync.class.getClassLoader().getResourceAsStream("META-INF/MANIFEST.MF")) {
+      if (manifestStream != null) {
+        Manifest manifest = new Manifest(manifestStream);
+        Attributes attributes = manifest.getMainAttributes();
+        commit =
+            attributes.getValue("XTable-Build-Commit") != null
+                ? attributes.getValue("XTable-Build-Commit")
+                : commit;
+        ref =
+            attributes.getValue("XTable-Build-Ref") != null
+                ? attributes.getValue("XTable-Build-Ref")
+                : ref;
+        version =
+            attributes.getValue("Implementation-Version") != null
+                ? attributes.getValue("Implementation-Version")
+                : version;
+      }
+    } catch (IOException e) {
+      log.debug("Unable to read build provenance from manifest", e);
+    }
+    return String.format("version=%s commit=%s ref=%s", version, commit, ref);
+  }
+
   public static void main(String[] args) throws IOException {
+    log.info("XTable RunSync build provenance: {}", buildProvenance());
     CommandLineParser parser = new DefaultParser();
 
     CommandLine cmd;
