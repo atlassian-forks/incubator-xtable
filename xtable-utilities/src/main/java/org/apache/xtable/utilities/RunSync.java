@@ -181,6 +181,7 @@ public class RunSync {
               .sourceTable(sourceTable)
               .targetTables(targetTables)
               .syncMode(SyncMode.INCREMENTAL)
+              .squashIncrementalCommits(datasetConfig.isSquashIncrementalCommits())
               .build();
       try {
         conversionController.sync(conversionConfig, conversionSourceProvider);
@@ -362,6 +363,13 @@ public class RunSync {
 
     /** Configuration of the dataset to sync, path, table name, etc. */
     List<Table> datasets;
+
+    /**
+     * When true, an incremental sync spanning multiple source commits is folded into a single
+     * target commit representing the head state. Defaults to false, i.e. one target commit per
+     * source commit, which is the historical behaviour.
+     */
+    boolean squashIncrementalCommits;
 
     @Value
     @Builder
