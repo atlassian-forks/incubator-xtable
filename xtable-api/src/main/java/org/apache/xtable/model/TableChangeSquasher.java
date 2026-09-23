@@ -27,6 +27,7 @@ import java.util.Map;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.apache.xtable.model.storage.InternalFile;
 import org.apache.xtable.model.storage.InternalFilesDiff;
@@ -54,6 +55,7 @@ import org.apache.xtable.model.storage.InternalFilesDiff;
  * inside the batch) must appear in neither the added nor the removed set, otherwise the target
  * would reference a data file that no longer exists.
  */
+@Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class TableChangeSquasher {
 
@@ -99,10 +101,15 @@ public class TableChangeSquasher {
     }
 
     if (lastChange == null) {
+      log.info("Squash: empty source backlog, no target commit will be emitted.");
       return Collections.emptyList();
     }
     if (count == 1) {
       // Nothing to fold; return the original instance so behaviour is identical to not squashing.
+      log.info(
+          "Squash: backlog held 1 source commit, nothing to fold; emitting it unchanged. "
+              + "Enabling squashIncrementalCommits has no observable effect on a single-commit "
+              + "backlog.");
       return Collections.singletonList(lastChange);
     }
     InternalFilesDiff squashedDiff =
@@ -110,6 +117,15 @@ public class TableChangeSquasher {
             .filesAdded(new ArrayList<>(netAdded.values()))
             .filesRemoved(new ArrayList<>(netRemoved.values()))
             .build();
+    log.info(
+        "Squashed {} source commits into 1 target commit: net filesAdded={}, filesRemoved={}, "
+            + "head table state from source commit at {}.",
+        count,
+        netAdded.size(),
+        netRemoved.size(),
+        lastChange.getTableAsOfChange() == null
+            ? "unknown"
+            : lastChange.getTableAsOfChange().getLatestCommitTime());
     return Collections.singletonList(lastChange.toBuilder().filesDiff(squashedDiff).build());
   }
 
