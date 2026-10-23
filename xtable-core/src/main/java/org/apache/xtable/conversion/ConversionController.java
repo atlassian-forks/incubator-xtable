@@ -46,6 +46,7 @@ import org.apache.xtable.model.IncrementalTableChanges;
 import org.apache.xtable.model.InstantsForIncrementalSync;
 import org.apache.xtable.model.InstantsForIncrementalSync.TargetSyncInstant;
 import org.apache.xtable.model.InternalSnapshot;
+import org.apache.xtable.model.TableChangeSquasher;
 import org.apache.xtable.model.catalog.CatalogTableIdentifier;
 import org.apache.xtable.model.metadata.TableSyncMetadata;
 import org.apache.xtable.model.sync.SyncMode;
@@ -206,7 +207,11 @@ public class ConversionController {
     SyncResultForTableFormats syncResultForIncrementalSync =
         formatsToSyncIncrementally.isEmpty()
             ? SyncResultForTableFormats.builder().build()
-            : syncIncrementalChanges(formatsToSyncIncrementally, lastSyncMetadataByFormat, source);
+            : syncIncrementalChanges(
+                formatsToSyncIncrementally,
+                lastSyncMetadataByFormat,
+                source,
+                config.isSquashIncrementalCommits());
     Map<String, SyncResult> syncResultsMerged =
         new HashMap<>(syncResultForIncrementalSync.getLastSyncResult());
     syncResultsMerged.putAll(syncResultForSnapshotSync.getLastSyncResult());
@@ -289,7 +294,8 @@ public class ConversionController {
   private <COMMIT> SyncResultForTableFormats syncIncrementalChanges(
       Map<String, ConversionTarget> conversionTargetByFormat,
       Map<String, Optional<TableSyncMetadata>> lastSyncMetadataByFormat,
-      ExtractFromSource<COMMIT> source) {
+      ExtractFromSource<COMMIT> source,
+      boolean squashIncrementalCommits) {
     Map<String, SyncResult> syncResultsByFormat = Collections.emptyMap();
     Map<ConversionTarget, TableSyncMetadata> filteredSyncMetadataByFormat =
         lastSyncMetadataByFormat.entrySet().stream()
@@ -303,6 +309,11 @@ public class ConversionController {
         getMostOutOfSyncCommitAndPendingCommits(filteredSyncMetadataByFormat);
     IncrementalTableChanges incrementalTableChanges =
         source.extractTableChanges(instantsForIncrementalSync);
+    if (squashIncrementalCommits) {
+      // Fold the backlog before it reaches the per-change loop in TableFormatSync#syncChanges, so
+      // the shared sync loop stays untouched and emits a single target commit for the head state.
+      incrementalTableChanges = TableChangeSquasher.squash(incrementalTableChanges);
+    }
     Map<String, List<SyncResult>> allResults =
         tableFormatSync.syncChanges(filteredSyncMetadataByFormat, incrementalTableChanges);
     // return only the last sync result in the list of results for each format

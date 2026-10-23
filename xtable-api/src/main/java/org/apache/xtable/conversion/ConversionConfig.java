@@ -42,13 +42,24 @@ public class ConversionConfig {
   Map<TargetTable, List<TargetCatalogConfig>> targetCatalogs;
   // The mode, incremental or snapshot
   SyncMode syncMode;
+  /**
+   * When {@code true}, an incremental sync spanning multiple source commits is folded into a single
+   * target commit representing the head state, instead of one target commit per source commit.
+   * Defaults to {@code false}, which preserves the per-commit behaviour.
+   *
+   * <p>This is a per-invocation option on purpose: a deployment may run one stream where the
+   * intermediate commits must stay visible and another where a multi-statement source batch must
+   * not be republished in its half-applied state.
+   */
+  boolean squashIncrementalCommits;
 
   @Builder
   ConversionConfig(
       @NonNull SourceTable sourceTable,
       List<TargetTable> targetTables,
       Map<TargetTable, List<TargetCatalogConfig>> targetCatalogs,
-      SyncMode syncMode) {
+      SyncMode syncMode,
+      boolean squashIncrementalCommits) {
     this.sourceTable = sourceTable;
     this.targetTables = targetTables;
     Preconditions.checkArgument(
@@ -56,5 +67,6 @@ public class ConversionConfig {
         "Please provide at-least one format to sync");
     this.targetCatalogs = targetCatalogs == null ? Collections.emptyMap() : targetCatalogs;
     this.syncMode = syncMode == null ? SyncMode.INCREMENTAL : syncMode;
+    this.squashIncrementalCommits = squashIncrementalCommits;
   }
 }
