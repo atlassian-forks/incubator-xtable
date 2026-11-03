@@ -200,10 +200,11 @@ public class ConversionController {
         conversionTargetByFormat.entrySet().stream()
             .filter(entry -> !formatsToSyncIncrementally.containsKey(entry.getKey()))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    String tableName = config.getSourceTable().getName();
     SyncResultForTableFormats syncResultForSnapshotSync =
         formatsToSyncBySnapshot.isEmpty()
             ? SyncResultForTableFormats.builder().build()
-            : syncSnapshot(formatsToSyncBySnapshot, source);
+            : syncSnapshot(formatsToSyncBySnapshot, source, tableName);
     SyncResultForTableFormats syncResultForIncrementalSync =
         formatsToSyncIncrementally.isEmpty()
             ? SyncResultForTableFormats.builder().build()
@@ -211,7 +212,8 @@ public class ConversionController {
                 formatsToSyncIncrementally,
                 lastSyncMetadataByFormat,
                 source,
-                config.isSquashIncrementalCommits());
+                config.isSquashIncrementalCommits(),
+                tableName);
     Map<String, SyncResult> syncResultsMerged =
         new HashMap<>(syncResultForIncrementalSync.getLastSyncResult());
     syncResultsMerged.putAll(syncResultForSnapshotSync.getLastSyncResult());
@@ -284,10 +286,23 @@ public class ConversionController {
   }
 
   private <COMMIT> SyncResultForTableFormats syncSnapshot(
-      Map<String, ConversionTarget> conversionTargetByFormat, ExtractFromSource<COMMIT> source) {
+      Map<String, ConversionTarget> conversionTargetByFormat,
+      ExtractFromSource<COMMIT> source,
+      String tableName) {
     InternalSnapshot snapshot = source.extractSnapshot();
     Map<String, SyncResult> syncResultsByFormat =
         tableFormatSync.syncSnapshot(conversionTargetByFormat.values(), snapshot);
+    syncResultsByFormat.forEach(
+        (format, result) -> {
+          SyncStatusCode status = result.getTableFormatSyncStatus().getStatusCode();
+          log.info(
+              syncResultLine(
+                  tableName,
+                  format,
+                  SyncMode.FULL,
+                  status.name(),
+                  status == SyncStatusCode.SUCCESS ? 1 : 0));
+        });
     return SyncResultForTableFormats.builder().lastSyncResult(syncResultsByFormat).build();
   }
 
@@ -295,7 +310,8 @@ public class ConversionController {
       Map<String, ConversionTarget> conversionTargetByFormat,
       Map<String, Optional<TableSyncMetadata>> lastSyncMetadataByFormat,
       ExtractFromSource<COMMIT> source,
-      boolean squashIncrementalCommits) {
+      boolean squashIncrementalCommits,
+      String tableName) {
     Map<String, SyncResult> syncResultsByFormat = Collections.emptyMap();
     Map<ConversionTarget, TableSyncMetadata> filteredSyncMetadataByFormat =
         lastSyncMetadataByFormat.entrySet().stream()
@@ -316,6 +332,18 @@ public class ConversionController {
     }
     Map<String, List<SyncResult>> allResults =
         tableFormatSync.syncChanges(filteredSyncMetadataByFormat, incrementalTableChanges);
+    for (String format : conversionTargetByFormat.keySet()) {
+      List<SyncResult> results = allResults.getOrDefault(format, Collections.emptyList());
+      long written =
+          results.stream()
+              .filter(r -> r.getTableFormatSyncStatus().getStatusCode() == SyncStatusCode.SUCCESS)
+              .count();
+      String status =
+          results.isEmpty()
+              ? "NOOP"
+              : results.get(results.size() - 1).getTableFormatSyncStatus().getStatusCode().name();
+      log.info(syncResultLine(tableName, format, SyncMode.INCREMENTAL, status, written));
+    }
     // return only the last sync result in the list of results for each format
     syncResultsByFormat =
         allResults.entrySet().stream()
@@ -323,6 +351,24 @@ public class ConversionController {
                 Collectors.toMap(
                     Map.Entry::getKey, entry -> entry.getValue().get(entry.getValue().size() - 1)));
     return SyncResultForTableFormats.builder().lastSyncResult(syncResultsByFormat).build();
+  }
+
+  /**
+   * Builds the single-line, machine-readable sync summary logged once per table and target format.
+   *
+   * @param tableName name of the source table
+   * @param format target table format
+   * @param mode sync mode that ran
+   * @param status a {@link SyncStatusCode} name, or NOOP when there was nothing to sync
+   * @param targetCommits number of commits written to the target in this run
+   * @return a line of the form {@code XTABLE_SYNC_RESULT {...json...}} with no error text
+   */
+  static String syncResultLine(
+      String tableName, String format, SyncMode mode, String status, long targetCommits) {
+    return String.format(
+        "XTABLE_SYNC_RESULT {\"table\":\"%s\",\"format\":\"%s\",\"mode\":\"%s\",\"status\":\"%s\","
+            + "\"target_commits\":%d}",
+        tableName, format, mode, status, targetCommits);
   }
 
   /**
