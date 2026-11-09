@@ -18,10 +18,13 @@
  
 package org.apache.xtable.conversion;
 
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 import static org.apache.xtable.conversion.ConversionUtils.convertToSourceTable;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -29,6 +32,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.ServiceLoader;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -54,6 +58,8 @@ import org.apache.xtable.model.sync.SyncResult;
 import org.apache.xtable.model.sync.SyncStatusCode;
 import org.apache.xtable.spi.extractor.ConversionSource;
 import org.apache.xtable.spi.extractor.ExtractFromSource;
+import org.apache.xtable.spi.metrics.MetricsProvider;
+import org.apache.xtable.spi.metrics.SyncEvent;
 import org.apache.xtable.spi.sync.CatalogSync;
 import org.apache.xtable.spi.sync.CatalogSyncClient;
 import org.apache.xtable.spi.sync.ConversionTarget;
@@ -77,6 +83,7 @@ public class ConversionController {
   private final CatalogConversionFactory catalogConversionFactory;
   private final TableFormatSync tableFormatSync;
   private final CatalogSync catalogSync;
+  List<MetricsProvider> metricsProviders = Collections.emptyList();
 
   public ConversionController(Configuration conf) {
     this(
@@ -85,6 +92,11 @@ public class ConversionController {
         CatalogConversionFactory.getInstance(),
         TableFormatSync.getInstance(),
         CatalogSync.getInstance());
+    metricsProviders = new ArrayList<>();
+    for (MetricsProvider provider : ServiceLoader.load(MetricsProvider.class)) {
+      provider.init(conf);
+      metricsProviders.add(provider);
+    }
   }
 
   /**
@@ -212,6 +224,16 @@ public class ConversionController {
                 lastSyncMetadataByFormat,
                 source,
                 config.isSquashIncrementalCommits());
+    for (String format : conversionTargetByFormat.keySet()) {
+      boolean incremental = formatsToSyncIncrementally.containsKey(format);
+      report(
+          config.getSourceTable().getName(),
+          format,
+          incremental ? SyncMode.INCREMENTAL : SyncMode.FULL,
+          incremental
+              ? syncResultForIncrementalSync.getAllResults().getOrDefault(format, emptyList())
+              : singletonList(syncResultForSnapshotSync.getLastSyncResult().get(format)));
+    }
     Map<String, SyncResult> syncResultsMerged =
         new HashMap<>(syncResultForIncrementalSync.getLastSyncResult());
     syncResultsMerged.putAll(syncResultForSnapshotSync.getLastSyncResult());
@@ -322,7 +344,10 @@ public class ConversionController {
             .collect(
                 Collectors.toMap(
                     Map.Entry::getKey, entry -> entry.getValue().get(entry.getValue().size() - 1)));
-    return SyncResultForTableFormats.builder().lastSyncResult(syncResultsByFormat).build();
+    return SyncResultForTableFormats.builder()
+        .lastSyncResult(syncResultsByFormat)
+        .allResults(allResults)
+        .build();
   }
 
   /**
@@ -413,9 +438,38 @@ public class ConversionController {
         });
   }
 
+  /** Reports one table/format outcome to every provider; a failing provider never fails a sync. */
+  private void report(String tableName, String format, SyncMode mode, List<SyncResult> results) {
+    if (metricsProviders.isEmpty()) {
+      return;
+    }
+    SyncResult last = results.isEmpty() ? null : results.get(results.size() - 1);
+    SyncEvent event =
+        SyncEvent.builder()
+            .tableName(tableName)
+            .format(format)
+            .mode(mode)
+            .status(last == null ? SyncEvent.STATUS_NOOP : statusCode(last).name())
+            .targetCommits(
+                results.stream().filter(r -> statusCode(r) == SyncStatusCode.SUCCESS).count())
+            .build();
+    for (MetricsProvider provider : metricsProviders) {
+      try {
+        provider.onTableSynced(event);
+      } catch (Exception e) {
+        log.warn("Metrics provider {} failed", provider.getClass().getName(), e);
+      }
+    }
+  }
+
+  private static SyncStatusCode statusCode(SyncResult result) {
+    return result.getTableFormatSyncStatus().getStatusCode();
+  }
+
   @Value
   @Builder
   private static class SyncResultForTableFormats {
     @Builder.Default Map<String, SyncResult> lastSyncResult = Collections.emptyMap();
+    @Builder.Default Map<String, List<SyncResult>> allResults = Collections.emptyMap();
   }
 }

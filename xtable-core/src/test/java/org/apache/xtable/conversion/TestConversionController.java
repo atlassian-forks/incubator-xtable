@@ -65,6 +65,7 @@ import org.apache.xtable.model.storage.TableFormat;
 import org.apache.xtable.model.sync.SyncMode;
 import org.apache.xtable.model.sync.SyncResult;
 import org.apache.xtable.spi.extractor.ConversionSource;
+import org.apache.xtable.spi.metrics.SyncEvent;
 import org.apache.xtable.spi.sync.CatalogSync;
 import org.apache.xtable.spi.sync.CatalogSyncClient;
 import org.apache.xtable.spi.sync.ConversionTarget;
@@ -229,9 +230,21 @@ public class TestConversionController {
             mockCatalogConversionFactory,
             tableFormatSync,
             catalogSync);
+    // A throwing provider must not affect the sync or the providers after it.
+    Map<String, SyncEvent> events = new HashMap<>();
+    conversionController.metricsProviders =
+        Arrays.asList(
+            event -> {
+              throw new IllegalStateException("agent unreachable");
+            },
+            event -> events.put(event.getFormat(), event));
     Map<String, SyncResult> result =
         conversionController.sync(conversionConfig, mockConversionSourceProvider);
     assertEquals(expectedSyncResult, result);
+    assertEquals(SyncMode.INCREMENTAL, events.get(ICEBERG).getMode());
+    assertEquals("SUCCESS", events.get(ICEBERG).getStatus());
+    assertEquals(4, events.get(ICEBERG).getTargetCommits());
+    assertEquals(2, events.get(DELTA).getTargetCommits());
   }
 
   @Test
